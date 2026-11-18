@@ -157,7 +157,7 @@ Wrangler te dará la URL: `https://ruleta-ark.<tu-subdominio>.workers.dev`. El c
 
 1. Entra con tu contraseña. La URL pública se guarda sola para los enlaces de los correos.
 2. **Tipos de cambio** → «Consultar el BCE» y guarda las monedas que uses. Las que no publica el BCE (ARS, CLP, COP…) se añaden a mano.
-3. **Premios** → en cada premio de descuento, pega los **códigos de un solo uso que hayas creado en tu tienda**. Sin códigos, el premio queda fuera de la ruleta y el resumen lo avisa.
+3. **Premios** → en cada premio de descuento, pega los **códigos de un solo uso que hayas creado en tu tienda**. Sin códigos, el premio queda fuera de la ruleta y el resumen lo avisa. Pon en «Detalles o condiciones» las condiciones de cada cupón (p. ej. «En compras desde 5 € · caduca a los 30 días»): el cliente las ve antes de girar.
 4. Revisa probabilidades, costes y límites de cada ruleta (deben sumar 100 %). Revisa también **Tramos**, **Países** y **Ajustes** (fechas de campaña, plataformas de ARK, cupo de correo).
 5. Prueba completa: **Tiradas → Añadir tiradas a mano** con tu propio correo, abre el enlace y gira.
 
@@ -173,6 +173,24 @@ Opcional y gratuito: protege `/admin/*` con **Cloudflare Access** (Zero Trust, g
 - **Correos**: contador de envíos del día frente al límite de 300 (avisa al 80 %), cola, errores, reintentos y botón «Enviar la cola ahora».
 - **RGPD**: busca un correo para ver sus datos, exportarlos o borrarlos a petición.
 - **Seguridad**: cambia la contraseña del panel, cierra la sesión en todos los dispositivos y revisa el estado de seguridad.
+
+### Personalizar las ruletas
+
+Todo se hace desde el panel, sin tocar código, y no hay límite de ruletas ni de premios:
+
+- **Tramos**: crea todas las ruletas que quieras (una fila nueva cada vez), **duplica** una existente (copia premios y diseño; nace desactivada y sin códigos de cupón) o **elimina** las que nunca se han usado.
+- **Premios**: añade todos los premios que quieras a cada ruleta. Cada uno tiene **imagen** (automática, uno de los 28 **iconos incluidos** —caja, cápsula, cofre, huevo, cabeza de dino, cristales, calavera, corona…— o una imagen tuya), **cualquier color** (selector de color) y **detalles o condiciones** en español e inglés. «**Ajustar a 100 % y guardar**» reparte las probabilidades en proporción para que sumen 100 % sin hacer cuentas.
+- **Imágenes**: biblioteca para tus logos, fotos de premios y fondos (PNG, JPEG, WebP o GIF). El navegador las reduce antes de subirlas (512 px para premios, 1920 px para fondos) y se guardan en la propia base de datos D1, gratis y sin servicios extra (hasta 200 MB en total; 1 MB por imagen). Una imagen en uso no se puede borrar.
+- **Diseño** (una pestaña por ruleta), con **vista previa en vivo** a la derecha donde puedes girar de prueba (no gasta tiradas ni guarda nada):
+  - colores principal y secundario (cualquiera);
+  - estilo del aro: **metal remachado**, **oro pulido**, **neón** u **obsidiana y lava**, con **luces** que parpadean, se aceleran al girar y destellan con el color del premio;
+  - qué se ve en los gajos: imagen y texto, solo imagen (más grande) o solo texto;
+  - **logo en el centro** (un icono o tu imagen);
+  - **fondo de la página**: retícula táctica, **volcán al atardecer**, **cielo nocturno con aurora**, liso o **una imagen tuya** con el oscurecido que elijas;
+  - textos: antetítulo, título, introducción y texto del botón (ES/EN);
+  - efectos: **sonido** (clics al pasar por cada gajo y fanfarria al ganar, generados en el navegador; el cliente puede silenciarlo), **confeti** con los colores del premio y duración del giro (3-12 s).
+
+Al terminar el giro, el gajo ganador se ilumina y el resto se oscurece; después aparece la tarjeta del premio con su imagen, rayos de luz y sus condiciones. Todo respeta `prefers-reduced-motion` (sin animaciones ni confeti para quien lo tenga activado).
 
 ---
 
@@ -245,7 +263,9 @@ Valores del plan gratuito tal como los conocía al escribir esto. **Compruébalo
 
 **Las que tomé yo**
 - **Hono + HTML renderizado en el servidor**, sin framework de cliente. El panel funciona sin JavaScript y la ruleta también: el botón «Girar» es un formulario normal y el JS solo añade la animación. Pesa poco y queda lejos del límite de tamaño del plan gratuito.
-- **SVG para la ruleta**: se ve nítida a cualquier tamaño, es accesible (cada segmento tiene título) y se gira con `transform`. Respeta `prefers-reduced-motion`.
+- **SVG para la ruleta**, en dos capas: los gajos giran con una transformación CSS (la tarjeta gráfica la mueve sin redibujarla: fluida también en móviles modestos) y el aro, las luces, el centro y el puntero quedan fijos encima. Se ve nítida a cualquier tamaño, es accesible (cada segmento tiene título) y respeta `prefers-reduced-motion`.
+- **Imágenes en D1** (base64) en vez de R2: R2 pide una tarjeta para activarse aunque sea gratis. Cada imagen se sirve en `/img/<id>-<hash>` con caché de un año (la URL cambia si cambia la imagen) y cuesta una lectura de D1 la primera vez que la ve cada visitante. El tipo se comprueba por el contenido del archivo (solo PNG, JPEG, WebP y GIF: nunca SVG ni HTML, que podrían llevar código).
+- **Colores libres con CSP estricta**: los colores e imágenes de cada ruleta van en un único `<style>` autorizado con un *nonce* aleatorio por respuesta; su contenido son solo colores `#rrggbb` y rutas de imágenes ya validados.
 - **El enlace «solo sirve una vez» para girar**. Después, el mismo enlace muestra el resultado (y el formulario de ARK si faltan datos), en vez de dar error. Si el cliente cierra la página antes de rellenar sus datos, puede volver a abrirlo.
 - **La caducidad de 30 días cuenta desde que el correo se envía de verdad**, no desde la autorización (si se queda en la cola por el cupo de Brevo, no pierde días).
 - **El token se genera en el momento del envío** y solo se guarda su hash SHA-256. Ni la cola de correos ni la base de datos tienen nunca el token en claro. Por eso **reenviar** genera un enlace nuevo y anula el anterior.
@@ -266,7 +286,7 @@ Valores del plan gratuito tal como los conocía al escribir esto. **Compruébalo
 ## 8. Seguridad y RGPD
 
 - Token de tirada de 32 bytes (`crypto.getRandomValues`) en base64url, guardado como SHA-256, de un solo giro y con caducidad de 30 días.
-- CSP estricta (`script-src 'self'`, sin scripts ni estilos en línea), `frame-ancestors 'none'`, `X-Frame-Options: DENY`, HSTS, `Cross-Origin-Opener-Policy` y `-Resource-Policy: same-origin`, `Referrer-Policy: same-origin` (el token nunca viaja a otros sitios) y `noindex`.
+- CSP estricta (`script-src 'self'`, sin scripts en línea; el único estilo en línea es el de colores e imágenes, con *nonce* por respuesta), `frame-ancestors 'none'` (salvo la vista previa del diseño, que solo se puede mostrar dentro del propio panel), `X-Frame-Options: DENY`, HSTS, `Cross-Origin-Opener-Policy` y `-Resource-Policy: same-origin`, `Referrer-Policy: same-origin` (el token nunca viaja a otros sitios) y `noindex`.
 - **Límite de peticiones por IP** (Workers Rate Limiting, incluido en el plan gratuito): 10 por minuto en girar, formulario de ARK, login y webhook; 60 por minuto en el resto de páginas públicas. Evita que alguien agote los cupos diarios gratuitos a base de peticiones.
 - Panel: cookie de sesión firmada con HMAC (`__Host-`, `HttpOnly`, `Secure`, `SameSite=Strict`, 12 h) y con versión, comprobación de `Origin` en todos los POST (CSRF), límite de intentos de inicio de sesión y mensajes de aviso por cookie de un solo uso (no se pueden inyectar por la URL).
 - **Página «Seguridad» del panel**: cambiar la contraseña (mínimo 12 caracteres; se guarda como hash PBKDF2 en D1 y tiene prioridad sobre el secreto inicial), «cerrar sesión en todos los dispositivos» y un resumen del estado de seguridad.
@@ -285,7 +305,7 @@ Valores del plan gratuito tal como los conocía al escribir esto. **Compruébalo
 cp .env.example .dev.vars            # y rellénalo (npm run hash-password para el hash)
 npm run db:migrate:local
 npm run dev                          # http://localhost:8787  ·  panel en /admin
-npm test                             # 74 tests en el runtime real de Workers (Miniflare + D1 local)
+npm test                             # 90 tests en el runtime real de Workers (Miniflare + D1 local)
 npm run typecheck
 ```
 
@@ -304,19 +324,20 @@ Los tests (`test/`) nunca llaman a Brevo de verdad. Cubren:
 | `panel.test.ts` | Login, bloqueo por intentos, cookie segura, CSRF, CSV → autorizar → correos, exportación CSV, «entregado», borrado RGPD, webhook desactivado/firmado, lector de CSV |
 | `enlaces.test.ts` | Enlaces directos: uno por ruleta desde el panel, token hasheado, un solo giro, sin correos, nota en el historial, validaciones |
 | `seguridad.test.ts` | Cambio de contraseña y cierre de sesiones, mensajes no inyectables por URL, límite de peticiones por IP (429), cabeceras de seguridad |
+| `personalizacion.test.ts` | Colores libres con `<style>` y nonce; subida de imágenes (tipo por contenido, SVG/HTML rechazados, 1 MB, duplicados), caché, URL con hash, borrado protegido; iconos; imagen y descripción del premio en la página, el resultado, la tirada y el correo; «Ajustar a 100 %»; diseño (textos escapados, aro, fondo, efectos, JSON roto); vista previa solo con sesión y sin escribir nada; duplicar y borrar ruletas |
 
 ### Estructura
 
 ```
 ruleta/
-├── migrations/            0001_esquema.sql, 0002_datos_ejemplo.sql
-├── public/                css, js, fuentes (OFL), favicon (se incrustan en el Worker al empaquetar)
+├── migrations/            0001 esquema · 0002 datos de ejemplo · 0003 enlaces directos · 0004 personalización
+├── public/                css, js, fuentes (OFL), favicon, fondo del volcán (se incrustan en el Worker al empaquetar)
 ├── scripts/hash-password.mjs
 ├── src/
 │   ├── index.tsx          Hono + cabeceras de seguridad + manejo de errores de D1 + cron
-│   ├── lib/               azar, probabilidades, tramos, dinero, csv, cripto, i18n, países…
-│   ├── servicios/         pedidos, tiradas (giro), correos (Brevo + cola), catálogo, sesión, mantenimiento
-│   ├── rutas/             publico.tsx, admin.tsx, webhook.ts
+│   ├── lib/               azar, probabilidades, tramos, dinero, csv, cripto, i18n, países, iconos, diseño, colores…
+│   ├── servicios/         pedidos, tiradas (giro), correos (Brevo + cola), catálogo, imágenes, sesión, mantenimiento
+│   ├── rutas/             publico.tsx, admin.tsx, admin-diseno.tsx (diseño e imágenes), medios.ts (/img, /icono), webhook.ts
 │   └── vistas/            páginas públicas, SVG de la ruleta, panel, correos
 ├── test/
 └── ejemplos/pedidos-ejemplo.csv

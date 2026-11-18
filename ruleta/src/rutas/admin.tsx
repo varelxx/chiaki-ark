@@ -1,12 +1,11 @@
 import { Hono } from "hono";
-import type { Child } from "hono/jsx";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { escribirCsv } from "../lib/csv";
-import { formatearEur, formatearMoneda, formatearNumeroPlano, pesoAPorcentaje } from "../lib/dinero";
+import { formatearMoneda, formatearNumeroPlano, pesoAPorcentaje } from "../lib/dinero";
 import { ErrorUsuario } from "../lib/errores";
 import { CODIGOS_PAISES, nombrePais, UE_EEE } from "../lib/paises";
 import { analizarRuleta, probabilidadesEfectivas } from "../lib/probabilidades";
-import { RAREZAS } from "../lib/rarezas";
+import { iconoPorTipo, urlImagen } from "../lib/medios";
 import { verificarContrasena } from "../lib/cripto";
 import { ahora, formatearFecha, normalizarFecha } from "../lib/tiempo";
 import { evaluarPedido } from "../lib/tramos";
@@ -14,6 +13,9 @@ import {
   bloquearPais,
   crearPremio,
   desbloquearPais,
+  duplicarRuleta,
+  eliminarRuleta,
+  MAX_DESCRIPCION,
   descargarTiposBce,
   eliminarCuponesLibres,
   eliminarPremio,
@@ -72,59 +74,14 @@ import {
   type FilaHistorial,
   type FiltroHistorial,
 } from "../servicios/tiradas";
-import type { Env, Premio, Ruleta } from "../tipos";
-import { Avisos, LayoutAdmin, Paginacion, PaginaLogin, type Flash } from "../vistas/admin-base";
+import type { Premio, Ruleta } from "../tipos";
+import { Avisos, Paginacion, PaginaLogin } from "../vistas/admin-base";
+import { eur, fecha, pagina, PaletaColores, qs, SelectorColor, SelectorImagen, texto, vista, volver } from "./admin-comun";
+import { listarImagenes } from "../servicios/imagenes";
+import { rutasDiseno } from "./admin-diseno";
 import { enteros, html, ipCliente, type App, type Ctx } from "./util";
 
 export const admin = new Hono<App>();
-
-const qs = (o: Record<string, string | number | undefined | null>) => {
-  const p = new URLSearchParams();
-  for (const [k, v] of Object.entries(o)) if (v !== undefined && v !== null && v !== "") p.set(k, String(v));
-  const s = p.toString();
-  return s ? `?${s}` : "";
-};
-/*
- * Mensajes de aviso del panel ("Guardado", errores...). Viajan en una cookie de un solo uso, NO en la
- * URL: así nadie puede mandarte un enlace al panel que muestre un mensaje falso.
- */
-const COOKIE_FLASH = "ruleta_flash";
-const volver = (c: Ctx, ruta: string, f: Flash) => {
-  setCookie(c, COOKIE_FLASH, JSON.stringify({ ok: f.ok, error: f.error }), {
-    httpOnly: true,
-    secure: cookieSesion(c.req.url).segura,
-    sameSite: "Strict",
-    path: "/admin",
-    maxAge: 60,
-  });
-  return c.redirect(ruta, 303);
-};
-const flash = (c: Ctx): Flash => {
-  const valor = getCookie(c, COOKIE_FLASH);
-  if (!valor) return {};
-  deleteCookie(c, COOKIE_FLASH, { path: "/admin", secure: cookieSesion(c.req.url).segura });
-  try {
-    const f = JSON.parse(valor) as Flash;
-    const limpio = (s: unknown) => (typeof s === "string" ? s.slice(0, 600) : undefined);
-    return { ok: limpio(f.ok), error: limpio(f.error) };
-  } catch {
-    return {};
-  }
-};
-const fecha = (env: Env, iso: string | null | undefined) => formatearFecha(iso, env.ZONA_HORARIA);
-const eur = (cents: number) => formatearEur(cents);
-const texto = (v: unknown) => (typeof v === "string" ? v : "");
-const pagina = (c: Ctx) => Math.max(1, Number(c.req.query("pagina")) || 1);
-
-function vista(c: Ctx, titulo: string, contenido: Child, estado = 200, f?: Flash) {
-  return html(
-    c,
-    <LayoutAdmin titulo={titulo} ruta={c.req.path} flash={f ?? flash(c)} tienda={c.env.TIENDA_NOMBRE}>
-      {contenido}
-    </LayoutAdmin>,
-    estado,
-  );
-}
 
 async function emitirSesion(c: Ctx, version: string): Promise<void> {
   const cookie = cookieSesion(c.req.url);
@@ -153,6 +110,7 @@ const proteger = async (c: Ctx, next: () => Promise<void>) => {
 };
 admin.use("/admin", proteger);
 admin.use("/admin/*", proteger);
+rutasDiseno(admin);
 
 admin.get("/admin/login", async (c) => html(c, <PaginaLogin tienda={c.env.TIENDA_NOMBRE} sinConfigurar={!panelConfigurado(c.env, await leerConfig(c.env.DB))} />));
 
@@ -928,35 +886,33 @@ admin.post("/admin/tiradas/acciones", async (c) => {
 
 // ---------- Premios ----------
 
-const SelectorRareza = ({ nombre, valor, form }: { nombre: string; valor: string; form?: string }) => (
-  <select name={nombre} form={form}>
-    {Object.entries(RAREZAS).map(([k, r]) => (
-      <option value={k} selected={k === valor}>
+const PestanasRuletas = ({ ruletas, actual, base }: { ruletas: Ruleta[]; actual: number; base: string }) => (
+  <nav class="pestanas">
+    {ruletas.map((r) => (
+      <a href={`${base}?ruleta=${r.id}`} class={r.id === actual ? "activo" : ""}>
         {r.nombre}
-      </option>
+        {r.activa ? "" : " (inactiva)"}
+      </a>
     ))}
-  </select>
+  </nav>
 );
+
+const iconoAuto = (tipo: string) => ({ tipo: "icono" as const, nombre: iconoPorTipo(tipo) });
 
 admin.get("/admin/premios", async (c) => {
   const db = c.env.DB;
   const ruletas = await listarRuletas(db);
   if (!ruletas.length) return vista(c, "Premios", <p>Primero crea una ruleta en Tramos.</p>);
   const ruleta = ruletas.find((r) => r.id === Number(c.req.query("ruleta"))) ?? ruletas[0];
-  const [premios, cupones] = await Promise.all([premiosDeRuleta(db, ruleta.id), resumenCupones(db, ruleta.id)]);
+  const [premios, cupones, imagenes] = await Promise.all([premiosDeRuleta(db, ruleta.id), resumenCupones(db, ruleta.id), listarImagenes(db)]);
   const a = analizarRuleta(ruleta, premios);
   const efectivas = new Map(probabilidadesEfectivas(premios).map((x) => [x.premio.id, x.prob]));
   return vista(
     c,
     "Premios y probabilidades",
     <>
-      <nav class="pestanas">
-        {ruletas.map((r) => (
-          <a href={`/admin/premios?ruleta=${r.id}`} class={r.id === ruleta.id ? "activo" : ""}>
-            {r.nombre}
-          </a>
-        ))}
-      </nav>
+      <PaletaColores />
+      <PestanasRuletas ruletas={ruletas} actual={ruleta.id} base="/admin/premios" />
       <div class={`tarjeta ${a.superaNominal || a.superaEfectivo ? "alerta" : ""}`}>
         <p>
           Pedidos desde <strong>{eur(ruleta.umbral_cents)}</strong> · Límite de coste <strong>{eur(ruleta.limite_coste_cents)}</strong> · Suma de probabilidades{" "}
@@ -966,12 +922,21 @@ admin.get("/admin/premios", async (c) => {
           Coste esperado (Σ probabilidad × coste): <strong>{eur(a.nominalCents)}</strong> · Real con el stock actual: <strong>{eur(a.efectivoCents)}</strong>
         </p>
         <Avisos avisos={a.avisos} />
+        <p class="acciones">
+          <a class="boton secundario" href={`/admin/diseno?ruleta=${ruleta.id}`}>
+            Diseño de esta ruleta
+          </a>
+          <a class="boton secundario" href={`/admin/diseno/${ruleta.id}/vista`} target="_blank" rel="noopener">
+            Ver cómo queda ↗
+          </a>
+        </p>
       </div>
       <form method="post" action={`/admin/premios/guardar?ruleta=${ruleta.id}`}>
-        <table class="editable">
+        <table class="editable premios">
           <thead>
             <tr>
               <th>Orden</th>
+              <th>Imagen</th>
               <th>Nombre (es)</th>
               <th>Nombre (en)</th>
               <th>Tipo</th>
@@ -984,12 +949,21 @@ admin.get("/admin/premios", async (c) => {
               <th></th>
             </tr>
           </thead>
-          <tbody>
-            {premios.map((p) => (
-              <tr class={efectivas.has(p.id) ? "" : "atenuado"}>
+          {premios.map((p) => (
+            <tbody class={`premio ${efectivas.has(p.id) ? "" : "atenuado"}`}>
+              <tr>
                 <td>
                   <input type="hidden" name="ids" value={p.id} />
                   <input name={`orden_${p.id}`} value={p.orden} class="corto" inputmode="numeric" />
+                </td>
+                <td>
+                  <SelectorImagen
+                    nombre={`imagen_${p.id}`}
+                    valor={p.imagen}
+                    imagenes={imagenes}
+                    vacio={{ texto: "Automática", miniatura: urlImagen(iconoAuto(p.tipo)) }}
+                    porDefecto={iconoAuto(p.tipo)}
+                  />
                 </td>
                 <td>
                   <input name={`nombre_${p.id}`} value={p.nombre} required maxlength={80} />
@@ -999,7 +973,7 @@ admin.get("/admin/premios", async (c) => {
                 </td>
                 <td>{p.tipo === "cupon" ? "Cupón" : "Objeto ARK"}</td>
                 <td>
-                  <SelectorRareza nombre={`rareza_${p.id}`} valor={p.rareza} />
+                  <SelectorColor nombre={`rareza_${p.id}`} valor={p.rareza} />
                 </td>
                 <td>
                   <input name={`peso_${p.id}`} value={formatearNumeroPlano(p.peso).replace(".", ",")} class="corto" inputmode="decimal" />
@@ -1026,14 +1000,35 @@ admin.get("/admin/premios", async (c) => {
                   </button>
                 </td>
               </tr>
-            ))}
-          </tbody>
+              <tr class="detalles">
+                <td></td>
+                <td colspan={11}>
+                  <div class="descripciones">
+                    <label>
+                      Detalles o condiciones (es)
+                      <input name={`descripcion_${p.id}`} value={p.descripcion ?? ""} maxlength={MAX_DESCRIPCION} placeholder="p. ej. En compras desde 5 € · caduca a los 30 días" />
+                    </label>
+                    <label>
+                      (en)
+                      <input name={`descripcion_en_${p.id}`} value={p.descripcion_en ?? ""} maxlength={MAX_DESCRIPCION} placeholder="e.g. On orders from €5 · expires after 30 days" />
+                    </label>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          ))}
         </table>
         <p class="pequeno">
-          Las probabilidades de los premios activos deben sumar exactamente 100 % (hasta 2 decimales). Stock vacío = ilimitado. El stock de los cupones es el número de códigos
-          libres de su bolsa. El coste estimado solo se ve aquí, nunca en la página pública.
+          Las probabilidades de los premios activos deben sumar exactamente 100 % (hasta 2 decimales); «Ajustar a 100 %» las reparte en proporción por ti. Stock vacío =
+          ilimitado. El stock de los cupones es el número de códigos libres de su bolsa. Los detalles se muestran al cliente en la tabla de probabilidades (antes de girar), en
+          el resultado y en el correo: pon ahí las condiciones de los cupones. El coste estimado solo se ve aquí.
         </p>
-        <button type="submit">Guardar cambios</button>
+        <div class="acciones">
+          <button type="submit">Guardar cambios</button>
+          <button type="submit" name="accion" value="ajustar" class="secundario">
+            Ajustar a 100 % y guardar
+          </button>
+        </div>
       </form>
       {premios.map((p) => (
         <form method="post" action={`/admin/premios/${p.id}/eliminar?ruleta=${ruleta.id}`} id={`borrar-${p.id}`} hidden></form>
@@ -1068,7 +1063,7 @@ admin.get("/admin/premios", async (c) => {
 
       <form method="post" action={`/admin/premios/nuevo?ruleta=${ruleta.id}`} class="tarjeta estrecha">
         <h2>Nuevo premio en {ruleta.nombre}</h2>
-        <p class="pequeno">Empieza con probabilidad 0 %; luego reparte las probabilidades en la tabla para que sumen 100 %.</p>
+        <p class="pequeno">Puedes añadir todos los que quieras. Empieza con probabilidad 0 %; luego reparte las probabilidades (o pulsa «Ajustar a 100 %»).</p>
         <label>
           Nombre (es) <input name="nombre" required maxlength={80} />
         </label>
@@ -1083,7 +1078,17 @@ admin.get("/admin/premios", async (c) => {
           </select>
         </label>
         <label>
-          Color <SelectorRareza nombre="rareza" valor="gris" />
+          Imagen
+          <SelectorImagen nombre="imagen" valor={null} imagenes={imagenes} vacio={{ texto: "Automática (según el tipo)", miniatura: null }} porDefecto={null} />
+        </label>
+        <label>
+          Color <SelectorColor nombre="rareza" valor="#b37bff" />
+        </label>
+        <label>
+          Detalles o condiciones (es) <input name="descripcion" maxlength={MAX_DESCRIPCION} placeholder="p. ej. En compras desde 5 € · caduca a los 30 días" />
+        </label>
+        <label>
+          Detalles o condiciones (en) <input name="descripcion_en" maxlength={MAX_DESCRIPCION} />
         </label>
         <label>
           Coste estimado € <input name="coste" value="0" inputmode="decimal" />
@@ -1110,17 +1115,22 @@ admin.post("/admin/premios/guardar", async (c) => {
     coste: texto(cuerpo[`coste_${id}`]),
     activo: cuerpo[`activo_${id}`] === "1",
     orden: texto(cuerpo[`orden_${id}`]),
+    imagen: texto(cuerpo[`imagen_${id}`]),
+    descripcion: texto(cuerpo[`descripcion_${id}`]),
+    descripcion_en: texto(cuerpo[`descripcion_en_${id}`]),
   }));
   const destino = `/admin/premios?ruleta=${ruletaId}`;
+  const ajustar = cuerpo.accion === "ajustar";
   try {
-    await guardarPremios(c.env.DB, ruletaId, filas);
+    await guardarPremios(c.env.DB, ruletaId, filas, { ajustar });
   } catch (e) {
     if (e instanceof ErrorUsuario) return volver(c, destino, { error: e.message });
     throw e;
   }
   const ruleta = (await listarRuletas(c.env.DB)).find((r) => r.id === ruletaId)!;
   const a = analizarRuleta(ruleta, await premiosDeRuleta(c.env.DB, ruletaId));
-  return volver(c, destino, a.superaNominal ? { ok: "Guardado.", error: `Aviso: el coste esperado (${eur(a.nominalCents)}) supera el límite del tramo (${eur(a.limiteCents)}).` } : { ok: "Guardado." });
+  const ok = ajustar ? "Probabilidades ajustadas a 100 % y guardadas." : "Guardado.";
+  return volver(c, destino, a.superaNominal ? { ok, error: `Aviso: el coste esperado (${eur(a.nominalCents)}) supera el límite del tramo (${eur(a.limiteCents)}).` } : { ok });
 });
 
 admin.post("/admin/premios/nuevo", async (c) => {
@@ -1137,12 +1147,15 @@ admin.post("/admin/premios/nuevo", async (c) => {
       coste: texto(b.coste),
       activo: true,
       orden: "99",
+      imagen: texto(b.imagen),
+      descripcion: texto(b.descripcion),
+      descripcion_en: texto(b.descripcion_en),
     });
   } catch (e) {
     if (e instanceof ErrorUsuario) return volver(c, `/admin/premios?ruleta=${ruletaId}`, { error: e.message });
     throw e;
   }
-  return volver(c, `/admin/premios?ruleta=${ruletaId}`, { ok: "Premio creado con probabilidad 0 %. Ajusta las probabilidades para que sumen 100 %." });
+  return volver(c, `/admin/premios?ruleta=${ruletaId}`, { ok: "Premio creado con probabilidad 0 %. Ajusta las probabilidades para que sumen 100 % (o pulsa «Ajustar a 100 %»)." });
 });
 
 admin.post("/admin/premios/:id/eliminar", async (c) => {
@@ -1171,17 +1184,6 @@ admin.post("/admin/premios/:id/cupones/vaciar", async (c) => {
 
 // ---------- Tramos ----------
 
-const SelectorColor = ({ nombre, valor, vacio }: { nombre: string; valor: string | null; vacio?: boolean }) => (
-  <select name={nombre}>
-    {vacio ? <option value="">—</option> : null}
-    {Object.entries(RAREZAS).map(([k, r]) => (
-      <option value={k} selected={k === valor}>
-        {r.nombre}
-      </option>
-    ))}
-  </select>
-);
-
 admin.get("/admin/tramos", async (c) => {
   const ruletas = await listarRuletas(c.env.DB);
   return vista(
@@ -1189,8 +1191,8 @@ admin.get("/admin/tramos", async (c) => {
     "Tramos (ruletas)",
     <>
       <p>
-        Cada pedido da <strong>una</strong> tirada en la ruleta activa con el importe mínimo más alto que alcance (importes en euros). Cambiar un tramo no afecta a las tiradas ya
-        autorizadas.
+        Cada pedido da <strong>una</strong> tirada en la ruleta activa con el importe mínimo más alto que alcance (importes en euros). Puedes crear todas las ruletas que
+        quieras. Cambiar un tramo no afecta a las tiradas ya autorizadas. Los colores, imágenes y textos de cada ruleta están en <a href="/admin/diseno">Diseño</a>.
       </p>
       <form method="post" action="/admin/tramos">
         <table class="editable">
@@ -1200,9 +1202,8 @@ admin.get("/admin/tramos", async (c) => {
               <th>Nombre (en)</th>
               <th>Importe mínimo €</th>
               <th>Límite de coste €</th>
-              <th>Color</th>
-              <th>2.º color</th>
               <th>Activa</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -1222,13 +1223,21 @@ admin.get("/admin/tramos", async (c) => {
                   <input name={`limite_${r.id}`} value={formatearNumeroPlano(r.limite_coste_cents).replace(".", ",")} class="corto" inputmode="decimal" required />
                 </td>
                 <td>
-                  <SelectorColor nombre={`color_${r.id}`} valor={r.color} />
-                </td>
-                <td>
-                  <SelectorColor nombre={`color2_${r.id}`} valor={r.color2} vacio />
-                </td>
-                <td>
                   <input type="checkbox" name={`activa_${r.id}`} value="1" checked={r.activa === 1} />
+                </td>
+                <td class="acciones-fila">
+                  <a href={`/admin/diseno?ruleta=${r.id}`} class="boton secundario mini">
+                    Diseño
+                  </a>
+                  <a href={`/admin/premios?ruleta=${r.id}`} class="boton secundario mini">
+                    Premios
+                  </a>
+                  <button type="submit" form={`duplicar-${r.id}`} class="secundario mini">
+                    Duplicar
+                  </button>
+                  <button type="submit" form={`eliminar-ruleta-${r.id}`} class="peligro mini" data-confirmar={`¿Borrar «${r.nombre}» con todos sus premios? Solo se puede si nunca se ha usado.`}>
+                    Eliminar
+                  </button>
                 </td>
               </tr>
             ))}
@@ -1246,19 +1255,24 @@ admin.get("/admin/tramos", async (c) => {
                 <input name="limite_nuevo" class="corto" inputmode="decimal" />
               </td>
               <td>
-                <SelectorColor nombre="color_nuevo" valor="morada" />
-              </td>
-              <td>
-                <SelectorColor nombre="color2_nuevo" valor={null} vacio />
-              </td>
-              <td>
                 <input type="checkbox" name="activa_nuevo" value="1" checked />
               </td>
+              <td></td>
             </tr>
           </tbody>
         </table>
         <button type="submit">Guardar tramos</button>
       </form>
+      {ruletas.map((r) => (
+        <>
+          <form method="post" action={`/admin/tramos/${r.id}/duplicar`} id={`duplicar-${r.id}`} hidden></form>
+          <form method="post" action={`/admin/tramos/${r.id}/eliminar`} id={`eliminar-ruleta-${r.id}`} hidden></form>
+        </>
+      ))}
+      <p class="pequeno">
+        «Duplicar» copia la ruleta con sus premios y su diseño (desactivada y sin códigos de cupón, que son de un solo uso). Una ruleta con pedidos o tiradas no se puede borrar:
+        desactívala.
+      </p>
     </>,
   );
 });
@@ -1271,8 +1285,6 @@ admin.post("/admin/tramos", async (c) => {
     nombre_en: texto(b[`nombre_en_${id}`]),
     umbral: texto(b[`umbral_${id}`]),
     limite: texto(b[`limite_${id}`]),
-    color: texto(b[`color_${id}`]),
-    color2: texto(b[`color2_${id}`]),
     activa: b[`activa_${id}`] === "1",
   }));
   if (texto(b.nombre_nuevo).trim()) {
@@ -1281,8 +1293,6 @@ admin.post("/admin/tramos", async (c) => {
       nombre_en: texto(b.nombre_en_nuevo),
       umbral: texto(b.umbral_nuevo),
       limite: texto(b.limite_nuevo),
-      color: texto(b.color_nuevo),
-      color2: texto(b.color2_nuevo),
       activa: b.activa_nuevo === "1",
     });
   }
@@ -1293,6 +1303,26 @@ admin.post("/admin/tramos", async (c) => {
     throw e;
   }
   return volver(c, "/admin/tramos", { ok: "Tramos guardados." });
+});
+
+admin.post("/admin/tramos/:id/duplicar", async (c) => {
+  try {
+    const id = await duplicarRuleta(c.env.DB, Number(c.req.param("id")));
+    return volver(c, `/admin/diseno?ruleta=${id}`, { ok: "Ruleta duplicada (desactivada). Cambia su nombre e importe mínimo en Tramos y actívala cuando esté lista." });
+  } catch (e) {
+    if (e instanceof ErrorUsuario) return volver(c, "/admin/tramos", { error: e.message });
+    throw e;
+  }
+});
+
+admin.post("/admin/tramos/:id/eliminar", async (c) => {
+  try {
+    await eliminarRuleta(c.env.DB, Number(c.req.param("id")));
+    return volver(c, "/admin/tramos", { ok: "Ruleta eliminada." });
+  } catch (e) {
+    if (e instanceof ErrorUsuario) return volver(c, "/admin/tramos", { error: e.message });
+    throw e;
+  }
 });
 
 // ---------- Tipos de cambio ----------

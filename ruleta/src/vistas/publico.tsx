@@ -2,25 +2,44 @@ import { urlEstatico } from "../rutas/estaticos";
 import type { FC, PropsWithChildren } from "hono/jsx";
 import { raw } from "hono/html";
 import { formatearEur } from "../lib/dinero";
+import { leerDiseno, type Diseno } from "../lib/diseno";
 import { nombreSegun, t } from "../lib/i18n";
+import { imagenDePremio, leerRef, urlImagen, type RefImagen } from "../lib/medios";
 import { nombrePais } from "../lib/paises";
+import { claseColor, hexDe, reglasColores } from "../lib/rarezas";
 import { formatearFecha } from "../lib/tiempo";
 import type { Env, Idioma, Ruleta, Tirada } from "../tipos";
-import { calcularAngulos, svgRuleta, type Segmento } from "./ruleta-svg";
+import { calcularAngulos, svgMarco, svgRotor, type Segmento } from "./ruleta-svg";
 
 export interface Marco {
   env: Env;
   idioma: Idioma;
   ruta: string; // ruta actual sin query, para el cambio de idioma
+  nonce: string; // nonce CSP del <style> con colores e imágenes personalizados
 }
 
 const enlaceIdioma = (ruta: string, idioma: Idioma) => `${ruta}?lang=${idioma}`;
 
-export const PaginaPublica: FC<PropsWithChildren<{ marco: Marco; titulo: string; tema?: string; tema2?: string | null; script?: boolean }>> = ({
+/** Estilo de una ruleta: colores del tema, colores libres usados y fondo con imagen propia. */
+export function estiloRuleta(ruleta: Pick<Ruleta, "color" | "color2">, d: Diseno, colores: Array<string | null | undefined> = []): string {
+  const c1 = hexDe(ruleta.color);
+  const c2 = ruleta.color2 ? hexDe(ruleta.color2) : null;
+  let css = `body{--c1:${c1}${c2 ? `;--c2:${c2}` : ""}}` + reglasColores(colores);
+  const fondo = leerRef(d.fondo);
+  if (fondo?.tipo === "img") {
+    const o = (d.fondo_oscuro / 100).toFixed(2);
+    css += `.fondo-imagen .fondo{background-image:linear-gradient(rgba(8,10,8,${o}),rgba(8,10,8,${o})),url(${urlImagen(fondo)})}`;
+  }
+  return css;
+}
+
+export const claseFondo = (d: Diseno): string => (leerRef(d.fondo)?.tipo === "img" ? "fondo-imagen" : `fondo-${d.fondo}`);
+
+export const PaginaPublica: FC<PropsWithChildren<{ marco: Marco; titulo: string; estilo?: string; claseCuerpo?: string; script?: boolean }>> = ({
   marco,
   titulo,
-  tema = "verde",
-  tema2,
+  estilo,
+  claseCuerpo = "fondo-reticula",
   script,
   children,
 }) => {
@@ -37,9 +56,10 @@ export const PaginaPublica: FC<PropsWithChildren<{ marco: Marco; titulo: string;
         <title>{`${titulo} · ${env.TIENDA_NOMBRE}`}</title>
         <link rel="icon" href={urlEstatico("/favicon.svg")} type="image/svg+xml" />
         <link rel="stylesheet" href={urlEstatico("/css/app.css")} />
+        {estilo ? <style nonce={marco.nonce}>{raw(estilo)}</style> : null}
         {script ? <script src={urlEstatico("/js/ruleta.js")} defer></script> : null}
       </head>
-      <body class={`tema-${tema} ${tema2 ? `tema2-${tema2}` : ""}`}>
+      <body class={claseCuerpo}>
         <div class="fondo" aria-hidden="true"></div>
         <header class="cabecera">
           <span class="marca">{env.TIENDA_NOMBRE}</span>
@@ -62,6 +82,13 @@ export const PaginaPublica: FC<PropsWithChildren<{ marco: Marco; titulo: string;
   );
 };
 
+/** Miniatura del premio: icono blanco sobre un disco de su color, o la imagen subida. */
+const Insignia: FC<{ imagen: RefImagen; color: string; clase?: string }> = ({ imagen, color, clase = "insignia" }) => (
+  <span class={`${clase}${imagen.tipo === "img" ? " foto" : ""} ${claseColor(color)}`} aria-hidden="true">
+    <img src={urlImagen(imagen)} alt="" width={64} height={64} loading="lazy" decoding="async" />
+  </span>
+);
+
 export const TablaProbabilidades: FC<{ segmentos: Segmento[]; idioma: Idioma; nota?: boolean }> = ({ segmentos, idioma, nota = true }) => (
   <section class="probabilidades" aria-labelledby="tit-prob">
     <h2 id="tit-prob">{t(idioma, "probabilidades")}</h2>
@@ -79,8 +106,13 @@ export const TablaProbabilidades: FC<{ segmentos: Segmento[]; idioma: Idioma; no
         {segmentos.map((s) => (
           <tr>
             <td>
-              <span class={`punto rareza-${s.rareza}`} aria-hidden="true"></span>
-              {s.etiqueta}
+              <div class="fila-premio">
+                <Insignia imagen={s.imagen} color={s.rareza} />
+                <div>
+                  <span class="nombre-fila">{s.etiqueta}</span>
+                  {s.descripcion ? <span class="detalle-fila">{s.descripcion}</span> : null}
+                </div>
+              </div>
             </td>
             <td class="num">{(s.prob * 100).toLocaleString(idioma === "es" ? "es-ES" : "en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} %</td>
           </tr>
@@ -90,31 +122,86 @@ export const TablaProbabilidades: FC<{ segmentos: Segmento[]; idioma: Idioma; no
   </section>
 );
 
-export const PaginaRuleta: FC<{ marco: Marco; tirada: Tirada; ruleta: Ruleta; segmentos: Segmento[]; token: string }> = ({ marco, tirada, ruleta, segmentos, token }) => {
+/** Texto personalizado del diseño o, si está vacío, el texto por defecto. */
+export function textosRuleta(d: Diseno, ruleta: Ruleta, idioma: Idioma) {
+  const elegir = (es: string, en: string, defecto: string) => (idioma === "en" ? en || es : es) || defecto;
+  return {
+    antetitulo: elegir(d.textos.antetitulo, d.textos.antetitulo_en, t(idioma, "cabecera")),
+    titulo: elegir(d.textos.titulo, d.textos.titulo_en, nombreSegun(idioma, ruleta)),
+    intro: elegir(d.textos.intro, d.textos.intro_en, t(idioma, "intro")),
+    boton: elegir(d.textos.boton, d.textos.boton_en, t(idioma, "girar")),
+  };
+}
+
+export interface ModoDemo {
+  api: string;
+  aviso: string;
+}
+
+export const PaginaRuleta: FC<{ marco: Marco; tirada: Tirada | null; ruleta: Ruleta; segmentos: Segmento[]; token: string; diseno?: Diseno; demo?: ModoDemo }> = ({
+  marco,
+  tirada,
+  ruleta,
+  segmentos,
+  token,
+  diseno,
+  demo,
+}) => {
   const { idioma, env } = marco;
+  const d = diseno ?? leerDiseno(ruleta.diseno);
   const angulos = calcularAngulos(segmentos);
-  const nombreRuleta = nombreSegun(idioma, ruleta);
+  const textos = textosRuleta(d, ruleta, idioma);
+  const centro = d.centro ? leerRef(d.centro) : null;
   const datos = JSON.stringify({
-    api: `/api/tirada/${token}/girar?lang=${idioma}`,
-    segmentos: angulos.map((s) => ({ id: s.id, inicio: s.inicio, fin: s.fin })),
-    textos: { girar: t(idioma, "girar"), girando: t(idioma, "girando"), error: t(idioma, "error_red"), copiado: t(idioma, "copiado") },
+    api: demo ? demo.api : `/api/tirada/${token}/girar?lang=${idioma}`,
+    demo: !!demo,
+    segmentos: angulos.map((s) => ({ id: s.id, inicio: s.inicio, fin: s.fin, color: hexDe(s.rareza) })),
+    efectos: { sonido: d.sonido, confeti: d.confeti, duracion: d.duracion },
+    colores: [hexDe(ruleta.color), hexDe(ruleta.color2 ?? ruleta.color)],
+    textos: {
+      girar: textos.boton,
+      girando: t(idioma, "girando"),
+      error: t(idioma, "error_red"),
+      copiado: t(idioma, "copiado"),
+      sonidoOn: t(idioma, "sonido_on"),
+      sonidoOff: t(idioma, "sonido_off"),
+    },
   }).replace(/</g, "\\u003c");
   return (
-    <PaginaPublica marco={marco} titulo={t(idioma, "titulo")} tema={ruleta.color} tema2={ruleta.color2} script>
+    <PaginaPublica
+      marco={marco}
+      titulo={textos.titulo}
+      estilo={estiloRuleta(ruleta, d, segmentos.map((s) => s.rareza))}
+      claseCuerpo={claseFondo(d)}
+      script
+    >
       <section class="escena">
-        <p class="antetitulo">{t(idioma, "cabecera")}</p>
-        <h1>{nombreRuleta}</h1>
-        <p class="intro">{t(idioma, "intro")}</p>
-        <div class="ruleta" id="ruleta">
+        {demo ? <p class="aviso-demo">{demo.aviso}</p> : null}
+        <p class="antetitulo">{textos.antetitulo}</p>
+        <h1>{textos.titulo}</h1>
+        <p class="intro">{textos.intro}</p>
+        <div class={`ruleta marco-${d.marco}${d.luces ? " con-luces" : ""}`} id="ruleta">
           <div class="haz" aria-hidden="true"></div>
-          {raw(svgRuleta(angulos, nombreRuleta))}
+          <div class="rotor" id="rotor">
+            {raw(svgRotor(angulos, d, textos.titulo))}
+          </div>
+          {raw(svgMarco(d, centro))}
         </div>
-        <form method="post" action={`/tirada/${token}/girar?lang=${idioma}`} class="form-girar" id="form-girar">
+        <form method="post" action={demo ? "#" : `/tirada/${token}/girar?lang=${idioma}`} class="form-girar" id="form-girar">
           <button type="submit" class="boton-girar" id="boton-girar">
-            {t(idioma, "girar")}
+            {textos.boton}
           </button>
+          {d.sonido ? (
+            <button type="button" class="boton-sonido" id="boton-sonido" aria-pressed="true" aria-label={t(idioma, "sonido_off")} title={t(idioma, "sonido_off")} hidden>
+              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                <path d="M4 9h4l5-4v14l-5-4H4Z" class="altavoz" />
+                <path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11" class="ondas" />
+                <path d="m16 9 6 6m0-6-6 6" class="mudo" />
+              </svg>
+            </button>
+          ) : null}
         </form>
-        <p class="caducidad">{t(idioma, "caduca_el", { fecha: formatearFecha(tirada.expira_en, env.ZONA_HORARIA, idioma, false) })}</p>
+        {tirada ? <p class="caducidad">{t(idioma, "caduca_el", { fecha: formatearFecha(tirada.expira_en, env.ZONA_HORARIA, idioma, false) })}</p> : null}
         <div id="resultado" class="resultado-contenedor" aria-live="polite"></div>
         <p id="mensaje-error" class="mensaje-error" role="alert" hidden></p>
       </section>
@@ -133,15 +220,25 @@ export interface PropsResultado {
   plataformas: string[];
   error?: string;
   guardado?: boolean;
+  /** Vista previa del panel: no se guarda nada y el formulario de entrega no se envía. */
+  demo?: boolean;
 }
 
-export const TarjetaResultado: FC<PropsResultado> = ({ marco, tirada, token, plataformas, error, guardado }) => {
+export const TarjetaResultado: FC<PropsResultado> = ({ marco, tirada, token, plataformas, error, guardado, demo }) => {
   const { idioma, env } = marco;
   const premio = nombreSegun(idioma, { nombre: tirada.premio_nombre, nombre_en: tirada.premio_nombre_en });
+  const descripcion = idioma === "en" ? tirada.premio_descripcion_en || tirada.premio_descripcion : tirada.premio_descripcion || tirada.premio_descripcion_en;
+  const imagen = imagenDePremio({ imagen: tirada.premio_imagen, tipo: tirada.premio_tipo });
+  const color = hexDe(tirada.premio_rareza);
   return (
-    <article class={`tarjeta-premio rareza-${tirada.premio_rareza ?? "gris"}`} id="tarjeta-premio">
+    <article class={`tarjeta-premio ${claseColor(tirada.premio_rareza)}`} id="tarjeta-premio" data-color={color}>
+      <div class="premio-visual" aria-hidden="true">
+        <div class="rayos"></div>
+        <img src={urlImagen(imagen, imagen.tipo === "icono" ? color : undefined)} alt="" width={128} height={128} decoding="async" />
+      </div>
       <p class="antetitulo">{t(idioma, "premio")}</p>
       <h2 class="nombre-premio">{premio}</h2>
+      {descripcion ? <p class="descripcion-premio">{descripcion}</p> : null}
       {tirada.premio_tipo === "cupon" && tirada.cupon_codigo ? (
         <div class="cupon">
           <p>{t(idioma, "cupon_texto")}</p>
@@ -160,7 +257,7 @@ export const TarjetaResultado: FC<PropsResultado> = ({ marco, tirada, token, pla
         tirada.estado === "entregada" ? (
           <p class="estado-entrega ok">{t(idioma, "entregado", { fecha: formatearFecha(tirada.entregada_en, env.ZONA_HORARIA, idioma, false) })}</p>
         ) : (
-          <form method="post" action={`/tirada/${token}/datos-ark?lang=${idioma}`} class="form-ark">
+          <form method="post" action={demo ? "#" : `/tirada/${token}/datos-ark?lang=${idioma}`} class="form-ark">
             {guardado ? (
               <p class="aviso ok" role="status">
                 {t(idioma, "datos_ok")}
@@ -179,28 +276,30 @@ export const TarjetaResultado: FC<PropsResultado> = ({ marco, tirada, token, pla
             ) : (
               <p>{t(idioma, "ark_texto")}</p>
             )}
-            <label>
-              {t(idioma, "gamertag")}
-              <input name="gamertag" required minlength={2} maxlength={64} autocomplete="nickname" value={tirada.ark_gamertag ?? ""} />
-            </label>
-            <label>
-              {t(idioma, "plataforma")}
-              <select name="plataforma" required>
-                <option value=""></option>
-                {plataformas.map((p) => (
-                  <option value={p} selected={p === tirada.ark_plataforma}>
-                    {p}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              {t(idioma, "discord")}
-              <input name="discord" required minlength={2} maxlength={40} autocomplete="off" value={tirada.ark_discord ?? ""} />
-            </label>
-            <button type="submit" class="boton-secundario">
-              {t(idioma, "enviar")}
-            </button>
+            <fieldset disabled={demo} class="campos-ark">
+              <label>
+                {t(idioma, "gamertag")}
+                <input name="gamertag" required minlength={2} maxlength={64} autocomplete="nickname" value={tirada.ark_gamertag ?? ""} />
+              </label>
+              <label>
+                {t(idioma, "plataforma")}
+                <select name="plataforma" required>
+                  <option value=""></option>
+                  {plataformas.map((p) => (
+                    <option value={p} selected={p === tirada.ark_plataforma}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                {t(idioma, "discord")}
+                <input name="discord" required minlength={2} maxlength={40} autocomplete="off" value={tirada.ark_discord ?? ""} />
+              </label>
+              <button type="submit" class="boton-secundario">
+                {t(idioma, "enviar")}
+              </button>
+            </fieldset>
           </form>
         )
       ) : null}
@@ -208,14 +307,23 @@ export const TarjetaResultado: FC<PropsResultado> = ({ marco, tirada, token, pla
   );
 };
 
-export const PaginaResultado: FC<PropsResultado & { ruleta: Ruleta }> = (props) => (
-  <PaginaPublica marco={props.marco} titulo={t(props.marco.idioma, "usada_t")} tema={props.ruleta.color} tema2={props.ruleta.color2} script>
-    <section class="escena escena-resultado">
-      <p class="antetitulo">{nombreSegun(props.marco.idioma, props.ruleta)}</p>
-      <TarjetaResultado {...props} />
-    </section>
-  </PaginaPublica>
-);
+export const PaginaResultado: FC<PropsResultado & { ruleta: Ruleta }> = (props) => {
+  const d = leerDiseno(props.ruleta.diseno);
+  return (
+    <PaginaPublica
+      marco={props.marco}
+      titulo={t(props.marco.idioma, "usada_t")}
+      estilo={estiloRuleta(props.ruleta, d, [props.tirada.premio_rareza])}
+      claseCuerpo={claseFondo(d)}
+      script
+    >
+      <section class="escena escena-resultado">
+        <p class="antetitulo">{textosRuleta(d, props.ruleta, props.marco.idioma).titulo}</p>
+        <TarjetaResultado {...props} />
+      </section>
+    </PaginaPublica>
+  );
+};
 
 export const PaginaMensaje: FC<{ marco: Marco; titulo: string; texto: string }> = ({ marco, titulo, texto }) => (
   <PaginaPublica marco={marco} titulo={titulo}>
@@ -246,8 +354,9 @@ export interface InfoRuletaPublica {
 
 export const PaginaProbabilidades: FC<{ marco: Marco; ruletas: InfoRuletaPublica[] }> = ({ marco, ruletas }) => {
   const { idioma } = marco;
+  const colores = ruletas.flatMap((r) => r.segmentos.map((s) => s.rareza));
   return (
-    <PaginaPublica marco={marco} titulo={t(idioma, "todas_prob")}>
+    <PaginaPublica marco={marco} titulo={t(idioma, "todas_prob")} estilo={reglasColores(colores) || undefined}>
       <section class="escena escena-texto">
         <h1>{t(idioma, "todas_prob")}</h1>
         <p>{t(idioma, "probabilidades_nota")}</p>
@@ -334,7 +443,8 @@ const terminosEs = (v: Vars, tramos: string[], paises: string | null) => (
     </p>
     <h2>5. Premios</h2>
     <p>
-      <strong>Cupones de descuento:</strong> código de un solo uso para una compra en {v.tienda}, con las condiciones de la tienda. <strong>Premios del videojuego:</strong> se
+      Las condiciones particulares de cada premio (por ejemplo, el importe mínimo de compra o la caducidad de un cupón) aparecen junto a él en la tabla de
+      probabilidades, antes de girar. <strong>Cupones de descuento:</strong> código de un solo uso para una compra en {v.tienda}, con esas condiciones y las de la tienda. <strong>Premios del videojuego:</strong> se
       entregan dentro del juego en la plataforma que indiques; necesitamos tu gamertag o ID. Si no podemos contactar contigo o los datos no permiten la entrega, te escribiremos
       para resolverlo. Ningún premio se puede cambiar por dinero.
     </p>
@@ -382,7 +492,8 @@ const terminosEn = (v: Vars, tramos: string[], paises: string | null) => (
     </p>
     <h2>5. Prizes</h2>
     <p>
-      <strong>Discount coupons:</strong> single-use code for one purchase at {v.tienda}, subject to the shop's conditions. <strong>In-game prizes:</strong> delivered inside the
+      Any specific conditions of a prize (for example a minimum purchase amount or a coupon's expiry) are shown next to it in the odds table, before you spin.{" "}
+      <strong>Discount coupons:</strong> single-use code for one purchase at {v.tienda}, subject to those conditions and the shop's own. <strong>In-game prizes:</strong> delivered inside the
       game on the platform you choose; we need your gamertag or ID. If we cannot reach you or the details do not allow delivery, we will email you to sort it out. No prize can be
       exchanged for cash.
     </p>

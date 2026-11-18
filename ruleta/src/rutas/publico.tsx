@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { ErrorUsuario, esErrorD1, esLimiteD1 } from "../lib/errores";
 import { elegirIdioma, nombreSegun, t } from "../lib/i18n";
+import { imagenDePremio } from "../lib/medios";
 import { probabilidadesEfectivas } from "../lib/probabilidades";
 import { enteroConfig, leerConfig, plataformas } from "../servicios/config";
 import { procesarCola } from "../servicios/correos";
@@ -33,11 +34,23 @@ import { aTexto, enSegundoPlano, html, ipCliente, paisCliente, type App, type Ct
 export const publico = new Hono<App>();
 
 function marco(c: Ctx, porDefecto?: Idioma): Marco {
-  return { env: c.env, idioma: elegirIdioma(c.req.query("lang"), porDefecto ? null : c.req.header("accept-language"), porDefecto ?? "es"), ruta: c.req.path };
+  return {
+    env: c.env,
+    idioma: elegirIdioma(c.req.query("lang"), porDefecto ? null : c.req.header("accept-language"), porDefecto ?? "es"),
+    ruta: c.req.path,
+    nonce: c.get("nonce"),
+  };
 }
 
 export const segmentosDe = (premios: Premio[], idioma: Idioma): Segmento[] =>
-  probabilidadesEfectivas(premios).map(({ premio, prob }) => ({ id: premio.id, etiqueta: nombreSegun(idioma, premio), rareza: premio.rareza, prob }));
+  probabilidadesEfectivas(premios).map(({ premio, prob }) => ({
+    id: premio.id,
+    etiqueta: nombreSegun(idioma, premio),
+    rareza: premio.rareza,
+    prob,
+    imagen: imagenDePremio(premio),
+    descripcion: (idioma === "en" ? premio.descripcion_en || premio.descripcion : premio.descripcion || premio.descripcion_en) ?? null,
+  }));
 
 /** Página de error para el cliente. Los fallos de D1 (cupo diario agotado) dan "vuelve mañana". */
 export function paginaError(c: Ctx, e: unknown, m: Marco): Promise<Response> {
@@ -172,7 +185,7 @@ publico.post("/api/tirada/:token/girar", async (c) => {
   try {
     const { tirada, premio, config } = await ejecutarGiro(c);
     const idioma = elegirIdioma(c.req.query("lang"), null, tirada.idioma);
-    const m: Marco = { env: c.env, idioma, ruta: `/tirada/${c.req.param("token")}` };
+    const m: Marco = { env: c.env, idioma, ruta: `/tirada/${c.req.param("token")}`, nonce: c.get("nonce") };
     const tarjeta = await aTexto(<TarjetaResultado marco={m} tirada={tirada} token={c.req.param("token")} plataformas={plataformas(config)} />);
     return c.json({ ok: true, premioId: premio.id, html: tarjeta });
   } catch (e) {

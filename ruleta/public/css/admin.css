@@ -66,7 +66,7 @@ input, select, textarea, button, .boton {
 }
 textarea { width: 100%; }
 input.corto { width: 6.5rem; }
-table.editable input:not([type="checkbox"]):not(.corto) { width: 100%; min-width: 9rem; }
+table.editable input:not([type="checkbox"]):not([type="color"]):not(.corto) { width: 100%; min-width: 9rem; }
 button, .boton { cursor: pointer; background: var(--acento); color: #0b0e0b; border-color: var(--acento); font-weight: 600; text-decoration: none; display: inline-block; }
 button.secundario, .boton.secundario { background: transparent; color: var(--texto); border-color: var(--linea); }
 button.peligro { background: transparent; color: var(--peligro); border-color: var(--peligro); }
@@ -97,7 +97,7 @@ body.login { display: grid; place-items: center; min-height: 100vh; padding: 16p
   .buscar { margin-left: 0; width: 100%; }
 }
 
-form.tarjeta input:not([type="checkbox"]), form.tarjeta select, form.tarjeta textarea, fieldset input:not([type="checkbox"]):not(.corto), fieldset textarea { width: 100%; min-width: 0; max-width: 100%; }
+form.tarjeta input:not([type="checkbox"]):not([type="color"]), form.tarjeta select, form.tarjeta textarea, fieldset input:not([type="checkbox"]):not([type="color"]):not(.corto), fieldset textarea { width: 100%; min-width: 0; max-width: 100%; }
 
 .enlace-generado { max-width: 760px; }
 .enlace-generado label { display: grid; gap: 0.2rem; margin: 0 0 0.5rem; }
@@ -108,3 +108,54 @@ form.tarjeta input:not([type="checkbox"]), form.tarjeta select, form.tarjeta tex
 .lista-estado li { padding: 0.35rem 0; border-bottom: 1px solid var(--linea); }
 .lista-estado li.ok { color: #9be3a1; }
 .lista-estado li.mal { color: var(--alerta); font-weight: 600; }
+
+/* Premios: imagen, color y detalles */
+input.color { width: 3rem; height: 2.1rem; padding: 0.1rem; cursor: pointer; }
+.selector-imagen { display: flex; align-items: center; gap: 0.4rem; }
+.selector-imagen select { max-width: 12rem; }
+.miniatura { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 6px; background: radial-gradient(circle at 50% 30%, #3a443a, #0b0e0b); border: 1px solid var(--linea); overflow: hidden; }
+.miniatura img { width: 34px; height: 34px; object-fit: contain; }
+table.premios tbody.premio { border-bottom: 2px solid var(--linea); }
+table.premios tbody.premio td { border-bottom: 0; }
+table.premios tr.detalles td { padding-top: 0; }
+tbody.atenuado tr:first-child td { opacity: 0.55; }
+.descripciones { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+.descripciones label { display: grid; gap: 0.15rem; font-size: 0.8rem; color: var(--tenue); }
+.descripciones input { width: 100%; }
+.acciones-fila { white-space: nowrap; }
+.acciones-fila .boton, .acciones-fila button { margin: 0 0.15rem 0.2rem 0; }
+.boton.mini { padding: 0.15rem 0.5rem; font-size: 0.8rem; }
+
+/* Diseño: formulario + vista previa */
+.diseno { display: grid; grid-template-columns: minmax(320px, 440px) 1fr; gap: 1.2rem; align-items: start; }
+.diseno-form fieldset { background: var(--panel); border: 1px solid var(--linea); border-radius: 6px; padding: 0.8rem 1rem; }
+.diseno-form label { display: grid; gap: 0.2rem; margin: 0 0 0.7rem; }
+.diseno-form label.check { display: flex; }
+.diseno-form select, .diseno-form textarea, .diseno-form input:not([type="checkbox"]):not([type="color"]):not([type="range"]) { width: 100%; }
+.fila-campos { display: flex; flex-wrap: wrap; gap: 0.8rem 1.2rem; align-items: end; }
+.rejilla-textos { display: grid; grid-template-columns: 1fr 1fr; gap: 0 0.7rem; }
+.rejilla-textos .ancho { grid-column: span 2; }
+input[type="range"] { width: 100%; accent-color: var(--acento); }
+.vista-previa { position: sticky; top: 56px; }
+.vista-previa iframe { width: 100%; height: calc(100vh - 140px); min-height: 560px; border: 1px solid var(--linea); border-radius: 8px; background: #0a0d0a; }
+@media (max-width: 980px) {
+  .diseno { grid-template-columns: 1fr; }
+  .vista-previa { position: static; }
+  .vista-previa iframe { height: 760px; }
+}
+
+/* Biblioteca de imágenes */
+.galeria { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 0.9rem; }
+.galeria figure { margin: 0; padding: 0.6rem; }
+.marco-imagen { aspect-ratio: 1; display: grid; place-items: center; border-radius: 4px; background: repeating-conic-gradient(#1b211b 0 25%, #121712 0 50%) 0 0 / 18px 18px; }
+.marco-imagen img { max-width: 92%; max-height: 92%; object-fit: contain; }
+.renombrar { display: flex; gap: 0.3rem; margin: 0.5rem 0 0.2rem; }
+.renombrar input { flex: 1; min-width: 0; }
+.galeria p { margin: 0.2rem 0; }
+.previas { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0 0 0.7rem; }
+.previas img { width: 56px; height: 56px; object-fit: contain; border: 1px solid var(--linea); border-radius: 4px; background: #0b0e0b; }
+table.premios input.corto { width: 4.8rem; }
+table.premios td:first-child input.corto { width: 3.2rem; }
+table.premios input:not([type="checkbox"]):not([type="color"]):not(.corto) { min-width: 8rem; }
+.diseno-form .rango { display: block; }
+button:disabled { opacity: 0.4; cursor: not-allowed; filter: none; }

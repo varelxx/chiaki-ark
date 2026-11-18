@@ -4,6 +4,7 @@ import { elegirIdioma, t } from "./lib/i18n";
 import { admin } from "./rutas/admin";
 import { ESTATICOS } from "./estaticos.generado";
 import { estaticos } from "./rutas/estaticos";
+import { medios } from "./rutas/medios";
 import { publico } from "./rutas/publico";
 import type { App } from "./rutas/util";
 import { webhook } from "./rutas/webhook";
@@ -13,21 +14,29 @@ import type { Env } from "./tipos";
 
 export const app = new Hono<App>();
 
-// Cabeceras de seguridad. Sin scripts ni estilos en línea: todo sale de /js y /css (mismo origen).
+// Cabeceras de seguridad. Sin scripts en línea: todo sale de /js (mismo origen). Los únicos estilos en
+// línea son el <style> con los colores e imágenes personalizados, autorizado con un nonce aleatorio por
+// respuesta (su contenido son solo colores #rrggbb y rutas de imágenes ya validados).
 app.use("*", async (c, next) => {
+  const aleatorio = crypto.getRandomValues(new Uint8Array(16));
+  const nonce = btoa(String.fromCharCode(...aleatorio));
+  c.set("nonce", nonce);
   await next();
+  // La vista previa del diseño se muestra dentro del propio panel (mismo origen); el resto, nunca en un iframe.
+  const enmarcable = c.get("enmarcable") === true;
   c.header(
     "Content-Security-Policy",
-    "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+    `default-src 'none'; script-src 'self'; style-src 'self' 'nonce-${nonce}'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; ` +
+      `form-action 'self'; base-uri 'none'; frame-src 'self'; frame-ancestors ${enmarcable ? "'self'" : "'none'"}`,
   );
   // same-origin: el token de la URL nunca viaja a otros sitios, y los formularios propios envían Origin
   // (con no-referrer los navegadores mandan "Origin: null" y la protección CSRF del panel los rechazaría).
   c.header("Referrer-Policy", "same-origin");
   c.header("X-Content-Type-Options", "nosniff");
   c.header("Permissions-Policy", "camera=(), microphone=(), geolocation=(), interest-cohort=()");
-  c.header("X-Frame-Options", "DENY");
+  c.header("X-Frame-Options", enmarcable ? "SAMEORIGIN" : "DENY");
   c.header("Cross-Origin-Opener-Policy", "same-origin");
-  c.header("Cross-Origin-Resource-Policy", "same-origin");
+  if (!c.res.headers.has("Cross-Origin-Resource-Policy")) c.header("Cross-Origin-Resource-Policy", "same-origin");
   c.header("X-Robots-Tag", "noindex, nofollow");
   if (new URL(c.req.url).protocol === "https:") c.header("Strict-Transport-Security", "max-age=31536000");
   if (!c.res.headers.has("Cache-Control")) c.header("Cache-Control", "no-store");
@@ -43,7 +52,8 @@ app.use("*", async (c, next) => {
 app.use("*", async (c, next) => {
   const ruta = c.req.path;
   const ip = c.req.header("cf-connecting-ip");
-  if (!ip || ESTATICOS[ruta]) return next();
+  // Estáticos e imágenes: cuestan como mucho una lectura de D1 y el navegador los guarda un año.
+  if (!ip || ESTATICOS[ruta] || ruta.startsWith("/img/") || ruta.startsWith("/icono/")) return next();
   const sensible =
     c.req.method === "POST" && (/^\/(api\/)?tirada\//.test(ruta) || ruta === "/admin/login" || ruta === "/admin/seguridad/contrasena" || ruta.startsWith("/api/webhook"));
   const limitador = sensible ? c.env.LIMITE_SENSIBLE : ruta.startsWith("/admin") ? undefined : c.env.LIMITE_PUBLICO;
@@ -64,6 +74,7 @@ app.use("*", async (c, next) => {
 });
 
 app.route("/", estaticos);
+app.route("/", medios);
 app.route("/", publico);
 app.route("/", admin);
 app.route("/", webhook);

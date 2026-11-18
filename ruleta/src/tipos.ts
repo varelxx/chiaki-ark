@@ -40,6 +40,8 @@ export interface Ruleta {
   umbral_cents: number;
   limite_coste_cents: number;
   activa: number;
+  /** JSON con el diseño (ver lib/diseno.ts). */
+  diseno: string;
 }
 
 export interface Premio {
@@ -54,6 +56,10 @@ export interface Premio {
   coste_cents: number;
   activo: number;
   orden: number;
+  /** «icono:<nombre>», «img:<id>:<hash>» o null (automática según el tipo). */
+  imagen: string | null;
+  descripcion: string | null;
+  descripcion_en: string | null;
 }
 
 export interface Pedido {
@@ -97,6 +103,9 @@ export interface Tirada {
   premio_tipo: "cupon" | "ark" | null;
   premio_rareza: string | null;
   premio_coste_cents: number | null;
+  premio_imagen: string | null;
+  premio_descripcion: string | null;
+  premio_descripcion_en: string | null;
   cupon_codigo: string | null;
   ip: string | null;
   ip_pais: string | null;

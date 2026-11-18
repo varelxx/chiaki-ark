@@ -86,11 +86,15 @@ export async function girar(db: D1Database, token: string, op: OpcionesGiro): Pr
         .prepare(
           `UPDATE tiradas SET estado = 'usada', usada_en = ?2, giro_nonce = ?3, premio_id = ?4, premio_nombre = ?5,
              premio_nombre_en = ?6, premio_tipo = ?7, premio_rareza = ?8, premio_coste_cents = ?9, ip = ?10, ip_pais = ?11,
+             premio_imagen = ?12, premio_descripcion = ?13, premio_descripcion_en = ?14,
              cupon_codigo = CASE WHEN ?7 = 'cupon'
                THEN (SELECT codigo FROM cupones WHERE premio_id = ?4 AND tirada_id IS NULL ORDER BY id LIMIT 1) ELSE NULL END
            WHERE id = ?1 AND estado = 'pendiente' AND expira_en > ?2`,
         )
-        .bind(tirada.id, momento, nonce, premio.id, premio.nombre, premio.nombre_en, premio.tipo, premio.rareza, premio.coste_cents, op.ip, ipPais),
+        .bind(
+          tirada.id, momento, nonce, premio.id, premio.nombre, premio.nombre_en, premio.tipo, premio.rareza, premio.coste_cents, op.ip, ipPais,
+          premio.imagen ?? null, premio.descripcion ?? null, premio.descripcion_en ?? null,
+        ),
       db
         .prepare(
           `UPDATE premios SET stock = stock - 1

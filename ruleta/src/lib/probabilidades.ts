@@ -71,3 +71,23 @@ export function analizarRuleta(ruleta: Pick<Ruleta, "limite_coste_cents" | "nomb
   if (sinPremiosDisponibles) avisos.push("No hay ningún premio disponible: las tiradas de esta ruleta esperarán sin perderse.");
   return { sumaPesos, sumaCorrecta: sumaPesos === PESO_TOTAL, nominalCents, efectivoCents, limiteCents, superaNominal, superaEfectivo, sinPremiosDisponibles, agotados, avisos };
 }
+
+/**
+ * Reparte los pesos de los premios activos para que sumen exactamente 100 % manteniendo sus
+ * proporciones (método del mayor resto, en centésimas de punto). Si todos valen 0, reparte a partes
+ * iguales. Los inactivos no cambian.
+ */
+export function ajustarA100(pesos: readonly number[], activos: readonly boolean[]): number[] {
+  const indices = pesos.map((_, i) => i).filter((i) => activos[i]);
+  if (!indices.length) return [...pesos];
+  const base = indices.map((i) => Math.max(0, pesos[i]));
+  const suma = base.reduce((s, p) => s + p, 0);
+  const ideales = base.map((p) => (suma > 0 ? (p / suma) * PESO_TOTAL : PESO_TOTAL / base.length));
+  const enteros = ideales.map(Math.floor);
+  let falta = PESO_TOTAL - enteros.reduce((s, p) => s + p, 0);
+  const orden = ideales.map((v, j) => ({ j, resto: Math.round((v - Math.floor(v)) * 1e6) })).sort((a, b) => b.resto - a.resto || a.j - b.j);
+  for (let k = 0; falta > 0; k = (k + 1) % orden.length, falta--) enteros[orden[k].j]++;
+  const res = [...pesos];
+  indices.forEach((i, j) => (res[i] = enteros[j]));
+  return res;
+}

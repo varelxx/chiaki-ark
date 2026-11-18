@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMax slice">
+  <defs>
+    <radialGradient id="brillo" cx="1060" cy="420" r="260" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffb347" stop-opacity=".75"/>
+      <stop offset=".35" stop-color="#ff5a1f" stop-opacity=".35"/>
+      <stop offset="1" stop-color="#ff5a1f" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="lava" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffd27a"/>
+      <stop offset=".4" stop-color="#ff6a1a"/>
+      <stop offset="1" stop-color="#7a1a05" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="niebla" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0a0d0a" stop-opacity="0"/>
+      <stop offset="1" stop-color="#0a0d0a" stop-opacity=".9"/>
+    </linearGradient>
+    <filter id="difuso" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="18"/></filter>
+    <filter id="humo" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="10"/></filter>
+  </defs>
+
+  <!-- Resplandor del cráter y columna de humo -->
+  <circle cx="1060" cy="420" r="260" fill="url(#brillo)"/>
+  <g fill="#3a3436" opacity=".55" filter="url(#humo)">
+    <circle cx="1050" cy="370" r="46"/><circle cx="1085" cy="320" r="58"/><circle cx="1040" cy="262" r="70"/>
+    <circle cx="1110" cy="205" r="84"/><circle cx="1180" cy="150" r="96"/><circle cx="1280" cy="110" r="104"/>
+  </g>
+  <g fill="#ff7a2a" opacity=".18" filter="url(#humo)">
+    <circle cx="1060" cy="380" r="38"/><circle cx="1080" cy="335" r="44"/>
+  </g>
+
+  <!-- Pterosaurios a lo lejos -->
+  <g fill="#0b0d12" opacity=".85">
+    <path d="M330 210q22-14 44-3 9-8 20-6-9 3-14 11-24-5-50-2z"/>
+    <path d="M300 250q-16-11-34-3-7-6-15-5 7 3 11 9 19-4 38-1z"/>
+    <path d="M520 160q14-9 28-2 6-5 13-4-6 2-9 7-15-3-32-1z"/>
+  </g>
+
+  <!-- Cordillera lejana -->
+  <path fill="#171b24" d="M0 560 90 500 170 530 260 450 350 520 430 470 520 540 600 505 680 560 760 520 840 580 V900 H0Z"/>
+  <path fill="#171b24" d="M1300 560 1380 500 1450 540 1530 470 1600 520 V900 H1300Z"/>
+
+  <!-- Volcán -->
+  <path fill="#120f12" d="M700 900 C840 760 930 560 1010 432 L1032 426 1046 438 1062 428 1080 436 1110 430 C1180 560 1290 760 1460 900Z"/>
+  <path fill="url(#lava)" d="M1046 438 C1040 500 1022 540 1012 610 C1030 560 1050 520 1058 470Z"/>
+  <path fill="url(#lava)" d="M1080 436 C1094 500 1120 560 1150 650 C1124 600 1098 540 1072 470Z"/>
+  <path fill="url(#lava)" opacity=".7" d="M1062 432 C1066 520 1070 600 1064 700 C1080 620 1084 520 1072 440Z"/>
+  <ellipse cx="1060" cy="432" rx="52" ry="10" fill="#ffb347" filter="url(#difuso)" opacity=".9"/>
+
+  <!-- Colinas intermedias -->
+  <path fill="#0d110e" d="M0 700 C120 640 220 660 320 620 C430 580 520 640 620 650 C700 660 760 700 860 690 C980 680 1080 720 1180 700 C1300 676 1420 640 1600 680 V900 H0Z"/>
+
+  <!-- Selva en primer plano -->
+  <g fill="#050705">
+    <path d="M0 790 C80 760 160 780 240 770 C330 758 420 790 520 780 C640 768 720 800 840 792 C960 784 1060 810 1180 800 C1320 788 1460 770 1600 790 V900 H0Z"/>
+    <!-- Palmera izquierda -->
+    <path d="M168 900 C176 820 182 760 206 690 L214 692 C192 760 188 820 184 900Z"/>
+    <path d="M210 690 C170 660 120 664 80 690 C126 672 168 676 206 696Z"/>
+    <path d="M210 690 C232 640 276 622 320 630 C276 636 240 656 214 696Z"/>
+    <path d="M210 690 C188 650 150 628 110 636 C152 640 184 664 206 694Z"/>
+    <path d="M212 690 C252 672 300 684 330 716 C294 694 252 688 214 696Z"/>
+    <path d="M210 690 C214 650 236 616 268 600 C244 628 228 656 214 694Z"/>
+    <!-- Palmera derecha -->
+    <path d="M1452 900 C1446 830 1438 772 1414 712 L1422 708 C1446 770 1458 830 1466 900Z"/>
+    <path d="M1418 710 C1456 676 1508 676 1548 700 C1502 686 1460 692 1422 716Z"/>
+    <path d="M1418 710 C1394 664 1350 646 1306 652 C1350 658 1388 678 1414 716Z"/>
+    <path d="M1418 710 C1440 668 1478 648 1520 654 C1478 662 1446 684 1422 716Z"/>
+    <path d="M1416 710 C1378 694 1330 706 1300 736 C1336 714 1378 708 1414 716Z"/>
+    <!-- Helechos -->
+    <path d="M40 900 C30 860 10 840 -10 830 C20 834 44 858 54 900Z M70 900 C78 852 104 826 136 814 C108 834 92 860 86 900Z"/>
+    <path d="M600 900 C590 862 566 842 540 834 C574 836 600 860 612 900Z M630 900 C640 858 668 834 702 824 C672 842 654 868 646 900Z"/>
+    <path d="M1180 900 C1170 866 1146 848 1120 842 C1152 842 1178 864 1192 900Z M1206 900 C1218 862 1244 840 1276 832 C1248 850 1230 874 1222 900Z"/>
+  </g>
+  <rect y="760" width="1600" height="140" fill="url(#niebla)"/>
+</svg>

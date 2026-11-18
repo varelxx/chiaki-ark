@@ -7,6 +7,8 @@ const SECCIONES: Array<[string, string]> = [
   ["/admin/enlaces", "Enlaces directos"],
   ["/admin/tiradas", "Tiradas e historial"],
   ["/admin/premios", "Premios"],
+  ["/admin/diseno", "Diseño"],
+  ["/admin/imagenes", "Imágenes"],
   ["/admin/tramos", "Tramos"],
   ["/admin/cambios", "Tipos de cambio"],
   ["/admin/paises", "Países"],

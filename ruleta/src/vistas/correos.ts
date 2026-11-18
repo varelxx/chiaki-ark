@@ -121,11 +121,19 @@ export function correoResultado(env: Env, urlBase: string, tirada: Tirada, rulet
     detalleTexto = t(idioma, clave);
   }
 
+  const descripcion = (idioma === "en" ? tirada.premio_descripcion_en || tirada.premio_descripcion : tirada.premio_descripcion || tirada.premio_descripcion_en) ?? "";
   const cuerpo = `<p ${P}>${esc(t(idioma, "c_hola"))}</p>
 <p style="margin:0 0 10px">${esc(t(idioma, "c_resultado_texto", { ruleta: nombreRuleta }))}</p>
-<p style="margin:0;font-size:24px;font-weight:700;color:${color}">${esc(premio)}</p>${detalle}
+<p style="margin:0;font-size:24px;font-weight:700;color:${color}">${esc(premio)}</p>${descripcion ? `\n<p style="margin:4px 0 0;font-size:14px;color:#b9c2b6">${esc(descripcion)}</p>` : ""}${detalle}
 ${firmaHtml(env, idioma)}`;
 
-  const texto = [t(idioma, "c_hola"), `${t(idioma, "c_resultado_texto", { ruleta: nombreRuleta })}\n${premio}`, detalleTexto, firmaTexto(env, idioma)].filter(Boolean).join("\n\n");
+  const texto = [
+    t(idioma, "c_hola"),
+    `${t(idioma, "c_resultado_texto", { ruleta: nombreRuleta })}\n${premio}${descripcion ? `\n${descripcion}` : ""}`,
+    detalleTexto,
+    firmaTexto(env, idioma),
+  ]
+    .filter(Boolean)
+    .join("\n\n");
   return { asunto, html: envoltorio(env, urlBase, idioma, cuerpo), texto };
 }

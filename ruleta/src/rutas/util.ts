@@ -1,7 +1,15 @@
 import type { Context } from "hono";
 import type { Env } from "../tipos";
 
-export type App = { Bindings: Env };
+export type App = {
+  Bindings: Env;
+  Variables: {
+    /** Nonce de esta respuesta para el <style> con los colores e imágenes personalizados (CSP). */
+    nonce: string;
+    /** Si es true, la página se puede mostrar en un iframe del propio panel (vista previa del diseño). */
+    enmarcable?: boolean;
+  };
+};
 export type Ctx = Context<App>;
 
 /** Renderiza un elemento JSX como documento HTML completo. */
