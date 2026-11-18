@@ -45,7 +45,8 @@ describe("cupo diario de Brevo", () => {
     expect((await peticion(`/api/tirada/${t.token}/girar`, { method: "POST" })).status).toBe(200);
     await procesarCola(env);
     expect(brevo.llamadas.map((l) => l.para)).toEqual(["gana@ejemplo.test"]);
-    expect(brevo.llamadas[0].asunto).toContain("Pack de recursos ARK");
+    expect(brevo.llamadas[0].asunto).toBe("Resultado de tu tirada en Tienda de Pruebas");
+    expect(brevo.llamadas[0].html).toContain("<strong>Pack de recursos ARK</strong>");
     expect(await enCola()).toBe(1);
   });
 
@@ -122,7 +123,7 @@ describe("cupo diario de Brevo", () => {
     const brevo = simularBrevo();
     await anadirTiradasManuales(env.DB, { correo: "en@ejemplo.test", ruletaId: 2, cantidad: 1, idioma: "en", pais: "" });
     await procesarCola(env);
-    expect(brevo.llamadas[0].asunto).toBe("Your spin on the Tienda de Pruebas prize wheel");
-    expect(brevo.llamadas[0].html).toContain("Spin the wheel");
+    expect(brevo.llamadas[0].asunto).toBe("Your Tienda de Pruebas spin is ready");
+    expect(brevo.llamadas[0].html).toContain("To use it, open this link:");
   });
 });

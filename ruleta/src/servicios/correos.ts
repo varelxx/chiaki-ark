@@ -162,10 +162,12 @@ export async function procesarCola(env: Env, opciones: { max?: number } = {}): P
   // Cargar de una vez todas las tiradas implicadas y las ruletas.
   const idsTiradas = [...new Set(correos.flatMap((c) => JSON.parse(c.tirada_ids) as number[]))];
   const [tiradasRes, ruletasRes] = await db.batch([
-    db.prepare("SELECT * FROM tiradas WHERE id IN (SELECT value FROM json_each(?1))").bind(JSON.stringify(idsTiradas)),
+    db
+      .prepare("SELECT t.*, p.numero AS pedido_numero FROM tiradas t LEFT JOIN pedidos p ON p.id = t.pedido_id WHERE t.id IN (SELECT value FROM json_each(?1))")
+      .bind(JSON.stringify(idsTiradas)),
     db.prepare("SELECT * FROM ruletas"),
   ]);
-  const tiradas = new Map((tiradasRes.results as unknown as Tirada[]).map((t) => [t.id, t]));
+  const tiradas = new Map((tiradasRes.results as unknown as Array<Tirada & { pedido_numero: string | null }>).map((t) => [t.id, t]));
   const ruletas = new Map((ruletasRes.results as unknown as Ruleta[]).map((r) => [r.id, r]));
 
   // Generar tokens nuevos para los enlaces. Se guardan (hasheados) ANTES de enviar: así el cliente nunca
@@ -203,11 +205,11 @@ export async function procesarCola(env: Env, opciones: { max?: number } = {}): P
     if (c.tipo === "enlace") {
       const enlaces = ids
         .filter((id) => tokens.has(id))
-        .map((id) => ({ url: `${base}/tirada/${tokens.get(id)}`, ruleta: ruletas.get(tiradas.get(id)!.ruleta_id)! }));
+        .map((id) => ({ url: `${base}/tirada/${tokens.get(id)}`, ruleta: ruletas.get(tiradas.get(id)!.ruleta_id)!, pedido: tiradas.get(id)!.pedido_numero }));
       if (enlaces.length) listo = correoEnlace(env, base, c.idioma, enlaces, expira);
     } else {
       const t = tiradas.get(ids[0]);
-      if (t && t.premio_id) listo = correoResultado(env, base, t, ruletas.get(t.ruleta_id)!);
+      if (t && t.premio_id) listo = correoResultado(env, base, t, ruletas.get(t.ruleta_id)!, t.pedido_numero);
     }
     if (!listo) {
       // Las tiradas se revocaron o ya se usaron: no hay nada que enviar.
