@@ -55,7 +55,8 @@ const es = {
   c_enlace_asunto_pedido: "Pedido {pedido}: tu tirada está lista",
   c_enlace_asunto_n: "Tus {n} tiradas de {tienda} están listas",
   c_enlace_asunto_n_pedidos: "Pedidos {pedidos}: tus {n} tiradas están listas",
-  c_hola: "Hola:",
+  c_hola: "¡Hola!",
+  c_boton: "Girar la ruleta",
   c_enlace_texto: "Tienes una tirada en la ruleta de {tienda}.",
   c_enlace_texto_pedido: "Gracias por tu pedido {pedido} en {tienda}. Con él tienes una tirada en nuestra ruleta.",
   c_enlace_texto_n: "Tienes {n} tiradas en la ruleta de {tienda}.",
@@ -71,7 +72,7 @@ const es = {
   c_resultado_cupon: "Tu código de descuento, de un solo uso:",
   c_resultado_ark: "Para entregártelo en el juego necesitamos tu gamertag y tu plataforma. Si no los indicaste al girar, vuelve a abrir el enlace de la tirada (el del correo anterior) y complétalos.",
   c_resultado_ark_ok: "Ya tenemos tus datos de entrega. Te avisaremos cuando lo tengas en el juego.",
-  c_pie: "Recibes este correo por tu compra en {tienda}. Condiciones: {terminos}. Privacidad: {privacidad}.",
+  c_pie: "Recibes este correo por tu compra en {tienda}. Más información: {terminos} · {privacidad}",
 };
 
 const en: typeof es = {
@@ -128,7 +129,8 @@ const en: typeof es = {
   c_enlace_asunto_pedido: "Order {pedido}: your spin is ready",
   c_enlace_asunto_n: "Your {n} spins from {tienda} are ready",
   c_enlace_asunto_n_pedidos: "Orders {pedidos}: your {n} spins are ready",
-  c_hola: "Hi,",
+  c_hola: "Hi!",
+  c_boton: "Spin the wheel",
   c_enlace_texto: "You have one spin on the {tienda} wheel.",
   c_enlace_texto_pedido: "Thank you for your order {pedido} at {tienda}. It comes with one spin on our wheel.",
   c_enlace_texto_n: "You have {n} spins on the {tienda} wheel.",
@@ -144,7 +146,7 @@ const en: typeof es = {
   c_resultado_cupon: "Your single-use discount code:",
   c_resultado_ark: "To deliver it in-game we need your gamertag and platform. If you did not enter them after spinning, open your spin link again (from the previous email) and complete them.",
   c_resultado_ark_ok: "We already have your delivery details. We will let you know when it is in the game.",
-  c_pie: "You receive this email because of your purchase at {tienda}. Terms: {terminos}. Privacy: {privacidad}.",
+  c_pie: "You receive this email because of your purchase at {tienda}. More information: {terminos} · {privacidad}",
 };
 
 export type ClaveTexto = keyof typeof es;

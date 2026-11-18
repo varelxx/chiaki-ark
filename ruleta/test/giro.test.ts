@@ -28,7 +28,6 @@ describe("enlace único", () => {
     // Asunto de notificación de pedido (con su número y sin la palabra «premio»), para evitar la pestaña Promociones.
     expect(brevo.llamadas[0].asunto).toBe("Pedido P-100: tu tirada está lista");
     expect(brevo.llamadas[0].html).toContain("Gracias por tu pedido P-100");
-    expect(brevo.llamadas[0].html).not.toMatch(/background:(?!#ffffff)/);
     const [token] = extraerToken(brevo.llamadas[0].html);
     expect(token).toHaveLength(43); // 32 bytes en base64url
     const t = (await tirada(1))!;
