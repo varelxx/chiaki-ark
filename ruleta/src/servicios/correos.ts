@@ -52,14 +52,20 @@ export async function estadoCorreos(db: D1Database, config: Config): Promise<Est
 
 type ResultadoBrevo = { ok: true; id: string } | { ok: false; tipo: "cupo" | "clave" | "permanente" | "temporal"; detalle: string };
 
+/** La clave sin espacios ni saltos de línea (es fácil que se cuelen al pegarla en el panel de Cloudflare). */
+export const claveBrevo = (env: Env): string => (env.BREVO_API_KEY ?? "").trim();
+
+/** Brevo tiene dos tipos de clave: la de API (xkeysib-…) y la SMTP (xsmtpsib-…). La ruleta necesita la de API. */
+export const esClaveSmtp = (env: Env): boolean => claveBrevo(env).startsWith("xsmtpsib-");
+
 export async function enviarBrevo(env: Env, para: string, correo: CorreoListo, etiqueta: string): Promise<ResultadoBrevo> {
   let respuesta: Response;
   try {
     respuesta = await fetch(`${env.BREVO_API_URL || "https://api.brevo.com/v3"}/smtp/email`, {
       method: "POST",
-      headers: { "api-key": env.BREVO_API_KEY ?? "", "content-type": "application/json", accept: "application/json" },
+      headers: { "api-key": claveBrevo(env), "content-type": "application/json", accept: "application/json" },
       body: JSON.stringify({
-        sender: { name: env.REMITENTE_NOMBRE || env.TIENDA_NOMBRE, email: env.REMITENTE_EMAIL },
+        sender: { name: env.REMITENTE_NOMBRE || env.TIENDA_NOMBRE, email: env.REMITENTE_EMAIL?.trim() },
         to: [{ email: para }],
         subject: correo.asunto,
         htmlContent: correo.html,
@@ -101,7 +107,7 @@ export interface ResultadoCola {
   enviados: number;
   fallidos: number;
   descartados: number;
-  motivo?: "pausa" | "sin_clave" | "sin_remitente" | "sin_url" | "cupo" | "vacia";
+  motivo?: "pausa" | "sin_clave" | "clave_smtp" | "sin_remitente" | "sin_url" | "cupo" | "vacia";
 }
 
 export const urlBase = (env: Env, config: Config): string => (env.URL_BASE || config.url_base || "").replace(/\/+$/, "");
@@ -116,7 +122,8 @@ export async function procesarCola(env: Env, opciones: { max?: number } = {}): P
   const config = await leerConfig(db);
   const vacio = { enviados: 0, fallidos: 0, descartados: 0 };
   if (pausaActiva(config)) return { ...vacio, motivo: "pausa" };
-  if (!env.BREVO_API_KEY) return { ...vacio, motivo: "sin_clave" };
+  if (!claveBrevo(env)) return { ...vacio, motivo: "sin_clave" };
+  if (esClaveSmtp(env)) return { ...vacio, motivo: "clave_smtp" };
   if (!env.REMITENTE_EMAIL) return { ...vacio, motivo: "sin_remitente" };
   const base = urlBase(env, config);
   if (!base) return { ...vacio, motivo: "sin_url" };

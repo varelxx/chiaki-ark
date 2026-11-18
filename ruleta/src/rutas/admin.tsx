@@ -31,7 +31,7 @@ import {
   type EntradaRuleta,
 } from "../servicios/catalogo";
 import { CONFIG_POR_DEFECTO, enteroConfig, guardarConfig, leerConfig, type Config } from "../servicios/config";
-import { descartarCorreos, estadoCorreos, procesarCola, quitarPausa, reintentarCorreos, urlBase, type ResultadoCola } from "../servicios/correos";
+import { claveBrevo, descartarCorreos, esClaveSmtp, estadoCorreos, procesarCola, quitarPausa, reintentarCorreos, urlBase, type ResultadoCola } from "../servicios/correos";
 import { borrarDatosDePersona, datosDePersona, mantenimientoDiario } from "../servicios/mantenimiento";
 import {
   autorizarPedidos,
@@ -179,7 +179,10 @@ admin.get("/admin", async (c) => {
   const [pedidosPend, arkPend, tiradasPend, numTipos] = conteos.map((r) => (r.results[0] as { n: number }).n);
   const analisis = await Promise.all(ruletas.map(async (r) => ({ r, a: analizarRuleta(r, await premiosDeRuleta(db, r.id)) })));
   const avisosConfig: string[] = [];
-  if (!c.env.BREVO_API_KEY) avisosConfig.push("Falta el secreto BREVO_API_KEY: no se puede enviar ningún correo.");
+  if (!claveBrevo(c.env)) avisosConfig.push("Falta el secreto BREVO_API_KEY: no se puede enviar ningún correo.");
+  else if (esClaveSmtp(c.env)) {
+    avisosConfig.push("BREVO_API_KEY es una clave SMTP (empieza por xsmtpsib-). Hace falta una clave de API (empieza por xkeysib-): Brevo → SMTP y API → Claves API.");
+  }
   if (!urlBase(c.env, config)) avisosConfig.push("No hay URL pública para los enlaces (URL_BASE).");
   const enCloudflare = "en Cloudflare: Workers & Pages → ruleta-ark → Settings → Variables and Secrets → Add (tipo Text)";
   if (!c.env.REMITENTE_EMAIL || c.env.REMITENTE_EMAIL.endsWith("example.com")) {
@@ -463,6 +466,7 @@ const ResultadoAutorizar = ({ r, cola }: { r: ResultadoAutorizacion; cola: Resul
       {cola.motivo === "pausa" ? " (envíos en pausa: mira la sección Correos)" : ""}
       {cola.motivo === "sin_clave" ? " (falta BREVO_API_KEY: los correos esperan en la cola)" : ""}
       {cola.motivo === "sin_remitente" ? " (falta REMITENTE_EMAIL: los correos esperan en la cola)" : ""}
+      {cola.motivo === "clave_smtp" ? " (BREVO_API_KEY es una clave SMTP, no de API: los correos esperan en la cola)" : ""}
       {cola.motivo === "sin_url" ? " (falta la URL pública: los correos esperan en la cola)" : ""}.
     </p>
     {r.rechazados.length ? (
@@ -1465,6 +1469,7 @@ admin.post("/admin/correos/procesar", async (c) => {
     pausa: "los envíos están en pausa",
     sin_clave: "falta BREVO_API_KEY",
     sin_remitente: "falta REMITENTE_EMAIL",
+    clave_smtp: "BREVO_API_KEY es una clave SMTP (xsmtpsib-), hace falta una de API (xkeysib-)",
     sin_url: "falta la URL pública",
     cupo: "cupo diario alcanzado",
     vacia: "la cola está vacía",

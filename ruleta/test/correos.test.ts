@@ -102,6 +102,22 @@ describe("cupo diario de Brevo", () => {
     expect((await procesarCola(env)).enviados).toBe(1);
   });
 
+  it("detecta una clave SMTP de Brevo y limpia espacios de la clave", async () => {
+    const brevo = simularBrevo();
+    await manual("smtp@ejemplo.test");
+    expect((await procesarCola({ ...env, BREVO_API_KEY: "xsmtpsib-falsa" })).motivo).toBe("clave_smtp");
+    expect(brevo.llamadas).toHaveLength(0);
+    expect(await enCola()).toBe(1);
+    let cabecera = "";
+    const espia = (await import("vitest")).vi.spyOn(globalThis, "fetch").mockImplementation(async (_e: RequestInfo | URL, init?: RequestInit) => {
+      cabecera = new Headers(init?.headers).get("api-key") ?? "";
+      return new Response(JSON.stringify({ messageId: "x" }), { status: 201 });
+    });
+    expect((await procesarCola({ ...env, BREVO_API_KEY: "  xkeysib-falsa\n" })).enviados).toBe(1);
+    expect(cabecera).toBe("xkeysib-falsa");
+    espia.mockRestore();
+  });
+
   it("correos en el idioma del cliente", async () => {
     const brevo = simularBrevo();
     await anadirTiradasManuales(env.DB, { correo: "en@ejemplo.test", ruletaId: 2, cantidad: 1, idioma: "en", pais: "" });
