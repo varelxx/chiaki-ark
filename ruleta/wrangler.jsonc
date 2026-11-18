@@ -20,6 +20,12 @@
       "migrations_dir": "migrations"
     }
   ],
+  // Límite de peticiones por IP (Workers Rate Limiting, incluido en el plan gratuito). Evita que alguien
+  // agote los cupos diarios gratuitos a base de peticiones. Periodo: 60 s.
+  "ratelimits": [
+    { "name": "LIMITE_PUBLICO", "namespace_id": "1001", "simple": { "limit": 60, "period": 60 } },
+    { "name": "LIMITE_SENSIBLE", "namespace_id": "1002", "simple": { "limit": 10, "period": 60 } }
+  ],
   // Cola de correos y mantenimiento diario. Usa 1 de los cron triggers gratuitos de la cuenta.
   "triggers": { "crons": ["*/10 * * * *"] },
   "observability": { "enabled": true },

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { analizarRuleta, costeEsperadoNominal } from "../src/lib/probabilidades";
 import { listarRuletas } from "../src/servicios/catalogo";
 import { premiosDeRuleta } from "../src/servicios/tiradas";
-import { entrarAdmin, idPremio, peticion, postAdmin } from "./ayudas";
+import { entrarAdmin, flashDe, idPremio, peticion, postAdmin } from "./ayudas";
 
 const analisis = async (id: number) => {
   const ruleta = (await listarRuletas(env.DB)).find((r) => r.id === id)!;
@@ -59,7 +59,8 @@ describe("límite de coste", () => {
     }
     const r = await postAdmin("/admin/premios/guardar?ruleta=3", cookie, datos);
     expect(r.status).toBe(303);
-    expect(new URL(r.headers.get("location")!, "https://x").searchParams.get("error")).toMatch(/supera el límite/);
+    expect(flashDe(r).error).toMatch(/supera el límite/);
+    expect(r.headers.get("location")).toBe("/admin/premios?ruleta=3"); // el mensaje no viaja en la URL
     expect((await analisis(3)).superaNominal).toBe(true); // se guardó
 
     const pagina = await (await peticion("/admin/premios?ruleta=3", { headers: { cookie } })).text();
@@ -68,7 +69,7 @@ describe("límite de coste", () => {
     // Pesos que no suman 100 %: no se guarda nada.
     const dino = premios.find((p) => p.nombre.startsWith("Dino"))!;
     const malo = await postAdmin("/admin/premios/guardar?ruleta=3", cookie, { ...datos, [`peso_${dino.id}`]: "6" });
-    expect(new URL(malo.headers.get("location")!, "https://x").searchParams.get("error")).toMatch(/deben sumar 100 %/);
+    expect(flashDe(malo).error).toMatch(/deben sumar 100 %/);
     expect((await env.DB.prepare("SELECT peso FROM premios WHERE id = ?1").bind(dino.id).first<{ peso: number }>())!.peso).toBe(500);
   });
 });

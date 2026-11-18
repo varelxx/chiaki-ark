@@ -149,13 +149,25 @@ export interface DatosArk {
   discord: string;
 }
 
+/**
+ * Usuario de Discord (obligatorio). Acepta el formato actual (2-32 caracteres: letras, números, «_» y
+ * «.», sin dos puntos seguidos; Discord los guarda en minúsculas) y el antiguo «nombre#1234».
+ * Se admite con «@» delante. Devuelve null si no es válido.
+ */
+export function normalizarDiscord(texto: unknown): string | null {
+  const d = String(texto ?? "").trim().replace(/^@/, "");
+  if (/^(?!.*\.\.)[a-z0-9_.]{2,32}$/i.test(d)) return d.toLowerCase();
+  if (/^[^#@:`\s\u0000-\u001f<>](?:[^#@:`\u0000-\u001f<>]{0,30})[^#@:`\s\u0000-\u001f<>]#\d{4}$/.test(d)) return d;
+  return null;
+}
+
 export function validarDatosArk(d: Partial<Record<keyof DatosArk, unknown>>, plataformasValidas: string[]): DatosArk {
   const gamertag = String(d.gamertag ?? "").trim();
   const plataforma = String(d.plataforma ?? "").trim();
-  const discord = String(d.discord ?? "").trim();
   if (gamertag.length < 2 || gamertag.length > 64 || /[\u0000-\u001f<>]/.test(gamertag)) throw new ErrorUsuario("gamertag", 422, "gamertag");
   if (!plataformasValidas.includes(plataforma)) throw new ErrorUsuario("plataforma", 422, "plataforma");
-  if (discord.length > 64 || /[\u0000-\u001f<>]/.test(discord)) throw new ErrorUsuario("discord", 422, "discord");
+  const discord = normalizarDiscord(d.discord);
+  if (!discord) throw new ErrorUsuario("discord", 422, "discord");
   return { gamertag, plataforma, discord };
 }
 
@@ -169,7 +181,7 @@ export async function guardarDatosArk(db: D1Database, token: string, datos: Dato
       `UPDATE tiradas SET ark_gamertag = ?2, ark_plataforma = ?3, ark_discord = ?4, ark_datos_en = ?5
        WHERE id = ?1 AND estado = 'usada' AND premio_tipo = 'ark'`,
     )
-    .bind(tirada.id, datos.gamertag, datos.plataforma, datos.discord || null, ahora())
+    .bind(tirada.id, datos.gamertag, datos.plataforma, datos.discord, ahora())
     .run();
   if (r.meta.changes !== 1) throw new ErrorUsuario("Este premio ya se ha entregado.", 409, "entregada");
   return (await db.prepare("SELECT * FROM tiradas WHERE id = ?1").bind(tirada.id).first<Tirada>())!;

@@ -1,5 +1,13 @@
+/** Binding de Workers Rate Limiting. */
+export interface Limitador {
+  limit(opciones: { key: string }): Promise<{ success: boolean }>;
+}
+
 export interface Env {
   DB: D1Database;
+  // Límite de peticiones por IP (opcionales: si faltan, no se limita).
+  LIMITE_PUBLICO?: Limitador;
+  LIMITE_SENSIBLE?: Limitador;
 
   // Secretos (wrangler secret put ...)
   BREVO_API_KEY?: string;

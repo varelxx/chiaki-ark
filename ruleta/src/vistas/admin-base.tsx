@@ -13,6 +13,7 @@ const SECCIONES: Array<[string, string]> = [
   ["/admin/correos", "Correos"],
   ["/admin/rgpd", "RGPD"],
   ["/admin/ajustes", "Ajustes"],
+  ["/admin/seguridad", "Seguridad"],
 ];
 
 export interface Flash {

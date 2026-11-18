@@ -28,6 +28,13 @@ export async function entrarAdmin(): Promise<string> {
   return cookie.split(";")[0];
 }
 
+/** Mensaje del panel ("Guardado", errores...) que viaja en la cookie de un solo uso ruleta_flash. */
+export function flashDe(r: Response): { ok?: string; error?: string } {
+  const cookie = r.headers.getSetCookie().find((c) => c.startsWith("ruleta_flash="));
+  if (!cookie) return {};
+  return JSON.parse(decodeURIComponent(cookie.split(";")[0].slice("ruleta_flash=".length)));
+}
+
 export async function postAdmin(ruta: string, cookie: string, datos: Record<string, string | string[]> | FormData): Promise<Response> {
   return peticion(ruta, { method: "POST", headers: { origin: ORIGEN, cookie }, body: datos instanceof FormData ? datos : formulario(datos) });
 }

@@ -187,15 +187,22 @@ describe("premios de ARK", () => {
     simularBrevo();
     const cuerpo = (await (await girar(t.token)).json()) as { html: string };
     expect(cuerpo.html).toContain('name="gamertag"');
-    expect(cuerpo.html).toContain('name="discord"');
+    expect(cuerpo.html).toMatch(/<input name="discord" required/);
 
-    const malo = await peticion(`/tirada/${t.token}/datos-ark`, { method: "POST", body: formulario({ gamertag: "Superviviente", plataforma: "Nintendo" }) });
+    const malo = await peticion(`/tirada/${t.token}/datos-ark`, { method: "POST", body: formulario({ gamertag: "Superviviente", plataforma: "Nintendo", discord: "surv_77" }) });
     expect(malo.headers.get("location")).toContain("error=plataforma");
 
-    const bueno = await peticion(`/tirada/${t.token}/datos-ark`, { method: "POST", body: formulario({ gamertag: "Superviviente_77", plataforma: "Xbox", discord: "surv#1" }) });
+    // El Discord es obligatorio.
+    const sinDiscord = await peticion(`/tirada/${t.token}/datos-ark`, { method: "POST", body: formulario({ gamertag: "Superviviente", plataforma: "Xbox" }) });
+    expect(sinDiscord.headers.get("location")).toContain("error=discord");
+    expect((await tirada(t.id))!.ark_datos_en).toBeNull();
+    const conError = await (await peticion(`/tirada/${t.token}?error=discord`)).text();
+    expect(conError).toContain("lo necesitamos para coordinar la entrega");
+
+    const bueno = await peticion(`/tirada/${t.token}/datos-ark`, { method: "POST", body: formulario({ gamertag: "Superviviente_77", plataforma: "Xbox", discord: "@Surv_77" }) });
     expect(bueno.status).toBe(303);
     const fila = (await tirada(t.id))!;
-    expect(fila).toMatchObject({ estado: "usada", ark_gamertag: "Superviviente_77", ark_plataforma: "Xbox", ark_discord: "surv#1" });
+    expect(fila).toMatchObject({ estado: "usada", ark_gamertag: "Superviviente_77", ark_plataforma: "Xbox", ark_discord: "surv_77" });
     const pagina = await (await peticion(`/tirada/${t.token}?ok=1`)).text();
     expect(pagina).toContain("Pendiente de entrega");
   });
@@ -248,5 +255,17 @@ describe("límite diario de D1", () => {
     const r = await peticion(`/tirada/${t.token}`, {}, { ...env, DB: caida } as Env);
     expect(r.status).toBe(503);
     expect(await r.text()).toContain("vuelve mañana");
+  });
+});
+
+describe("usuario de Discord", () => {
+  it("acepta el formato actual y el antiguo, y rechaza el resto", async () => {
+    const { normalizarDiscord } = await import("../src/servicios/tiradas");
+    expect(normalizarDiscord("superviviente_77")).toBe("superviviente_77");
+    expect(normalizarDiscord(" @Dino.Tamer ")).toBe("dino.tamer");
+    expect(normalizarDiscord("Nombre#1234")).toBe("Nombre#1234");
+    for (const malo of ["", "a", "dos..puntos", "con espacio", "x".repeat(33), "nombre#12", "<script>", "@"]) {
+      expect(normalizarDiscord(malo), malo).toBeNull();
+    }
   });
 });

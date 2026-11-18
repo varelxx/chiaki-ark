@@ -67,7 +67,7 @@ Se congela el importe en € y el tramo  ──►  se crea 1 tirada  ──► 
         ▼
 El servidor elige el premio (crypto.getRandomValues)  ──►  el navegador anima hasta él
         ▼
-Cupón: código único de la bolsa   ·   Objeto de ARK: formulario gamertag + plataforma (+ Discord)
+Cupón: código único de la bolsa   ·   Objeto de ARK: formulario gamertag + plataforma + Discord (obligatorio)
         ▼
 Correo con el resultado  ·  Panel: historial, «marcar entregado», exportar CSV
 ```
@@ -172,6 +172,7 @@ Opcional y gratuito: protege `/admin/*` con **Cloudflare Access** (Zero Trust, g
 - **Tiradas e historial**: fecha, pedido, correo, país, ruleta, premio, estado (pendiente / usada / entregada / revocada / caducada) e IP. Desde aquí puedes **reenviar** el enlace (genera uno nuevo y el anterior deja de valer), **revocar** tiradas pendientes, **marcar como entregados** los premios de ARK, **exportar a CSV** y **añadir N tiradas a mano** a un correo, sin pedido.
 - **Correos**: contador de envíos del día frente al límite de 300 (avisa al 80 %), cola, errores, reintentos y botón «Enviar la cola ahora».
 - **RGPD**: busca un correo para ver sus datos, exportarlos o borrarlos a petición.
+- **Seguridad**: cambia la contraseña del panel, cierra la sesión en todos los dispositivos y revisa el estado de seguridad.
 
 ---
 
@@ -237,7 +238,7 @@ Valores del plan gratuito tal como los conocía al escribir esto. **Compruébalo
 - **Cupones = bolsa de códigos**: tú creas en la tienda los códigos de un solo uso y los importas por premio. Así el código que recibe el cliente siempre funciona. El stock de un premio de cupón es el número de códigos libres.
 - **Segmentos proporcionales a la probabilidad**: lo que se ve en la ruleta coincide con las probabilidades publicadas.
 - **Español e inglés**: la página sigue el idioma del navegador (con `?lang=` para cambiarlo) y los correos el país del pedido: los países hispanohablantes reciben español y el resto, inglés. El panel está solo en español.
-- **Entrega de ARK**: gamertag/ID + plataforma (lista editable) + Discord opcional.
+- **Entrega de ARK**: gamertag/ID + plataforma (lista editable) + usuario de Discord, **obligatorio** (formato actual de 2-32 caracteres o el antiguo `nombre#1234`).
 - **Límite de coste: solo avisar**. El panel avisa si el coste esperado (con los pesos configurados o con el stock real) supera el límite, pero deja guardar. Lo que sí se exige es que las probabilidades activas sumen exactamente 100 %.
 - **Extras** (elegí los que recomiendo): botón de tipos del BCE, recorte de IPs a los 90 días, fechas de campaña opcionales y bloqueo por IP del visitante (**desactivado** por defecto: con una VPN se salta y puede bloquear a clientes de viaje).
 - **Carpeta `ruleta/`** y `paths-ignore: ruleta/**` en `.github/workflows/build-ark.yml`, para que los cambios de la ruleta no lancen la compilación de chiaki-ng.
@@ -265,10 +266,12 @@ Valores del plan gratuito tal como los conocía al escribir esto. **Compruébalo
 ## 8. Seguridad y RGPD
 
 - Token de tirada de 32 bytes (`crypto.getRandomValues`) en base64url, guardado como SHA-256, de un solo giro y con caducidad de 30 días.
-- CSP estricta (`script-src 'self'`, sin scripts ni estilos en línea), `frame-ancestors 'none'`, `Referrer-Policy: same-origin` (el token nunca viaja a otros sitios) y `noindex`.
-- Panel: cookie de sesión firmada con HMAC (`__Host-`, `HttpOnly`, `Secure`, `SameSite=Strict`, 12 h), comprobación de `Origin` en todos los POST (CSRF) y límite de intentos de inicio de sesión.
+- CSP estricta (`script-src 'self'`, sin scripts ni estilos en línea), `frame-ancestors 'none'`, `X-Frame-Options: DENY`, HSTS, `Cross-Origin-Opener-Policy` y `-Resource-Policy: same-origin`, `Referrer-Policy: same-origin` (el token nunca viaja a otros sitios) y `noindex`.
+- **Límite de peticiones por IP** (Workers Rate Limiting, incluido en el plan gratuito): 10 por minuto en girar, formulario de ARK, login y webhook; 60 por minuto en el resto de páginas públicas. Evita que alguien agote los cupos diarios gratuitos a base de peticiones.
+- Panel: cookie de sesión firmada con HMAC (`__Host-`, `HttpOnly`, `Secure`, `SameSite=Strict`, 12 h) y con versión, comprobación de `Origin` en todos los POST (CSRF), límite de intentos de inicio de sesión y mensajes de aviso por cookie de un solo uso (no se pueden inyectar por la URL).
+- **Página «Seguridad» del panel**: cambiar la contraseña (mínimo 12 caracteres; se guarda como hash PBKDF2 en D1 y tiene prioridad sobre el secreto inicial), «cerrar sesión en todos los dispositivos» y un resumen del estado de seguridad.
 - Exportación CSV protegida contra la inyección de fórmulas en Excel.
-- **Datos mínimos**: correo, n.º de pedido, importe, moneda, país y fecha. Al girar, la IP y el país de conexión. En premios de ARK, gamertag, plataforma y Discord opcional.
+- **Datos mínimos**: correo, n.º de pedido, importe, moneda, país y fecha. Al girar, la IP y el país de conexión. En premios de ARK, gamertag, plataforma y usuario de Discord.
 - **Recorte automático de IPs** a los 90 días (configurable). Los destinatarios de correos ya enviados también se anonimizan pasado ese plazo.
 - **Derecho de acceso y supresión**: sección RGPD del panel. Al borrar se conservan, sin datos personales, el n.º de pedido (para que no se pueda reimportar y dar otra tirada), los importes, los premios y los costes.
 - Textos de **términos** y **privacidad** en `/legal/terminos` y `/legal/privacidad` (ES/EN), con las probabilidades publicadas en la página de cada tirada y en `/probabilidades`.
@@ -282,7 +285,7 @@ Valores del plan gratuito tal como los conocía al escribir esto. **Compruébalo
 cp .env.example .dev.vars            # y rellénalo (npm run hash-password para el hash)
 npm run db:migrate:local
 npm run dev                          # http://localhost:8787  ·  panel en /admin
-npm test                             # 68 tests en el runtime real de Workers (Miniflare + D1 local)
+npm test                             # 74 tests en el runtime real de Workers (Miniflare + D1 local)
 npm run typecheck
 ```
 
@@ -300,6 +303,7 @@ Los tests (`test/`) nunca llaman a Brevo de verdad. Cubren:
 | `correos.test.ts` | Cupo diario (cola y envío al día siguiente), reserva para resultados, pausa si Brevo responde 402, reintentos, aviso al 80 %, cron, idioma |
 | `panel.test.ts` | Login, bloqueo por intentos, cookie segura, CSRF, CSV → autorizar → correos, exportación CSV, «entregado», borrado RGPD, webhook desactivado/firmado, lector de CSV |
 | `enlaces.test.ts` | Enlaces directos: uno por ruleta desde el panel, token hasheado, un solo giro, sin correos, nota en el historial, validaciones |
+| `seguridad.test.ts` | Cambio de contraseña y cierre de sesiones, mensajes no inyectables por URL, límite de peticiones por IP (429), cabeceras de seguridad |
 
 ### Estructura
 

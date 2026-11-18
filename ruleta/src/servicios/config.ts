@@ -13,6 +13,8 @@ export interface Config {
   mantenimiento_ultimo: string;
   correo_pausa_hasta: string;      // si Brevo rechaza por cupo/clave, se pausa la cola
   correo_pausa_motivo: string;
+  admin_hash: string;              // hash de la contraseña cambiada desde el panel (prioridad sobre el secreto)
+  sesion_version: string;          // al cambiarla se cierran todas las sesiones del panel
 }
 
 export const CONFIG_POR_DEFECTO: Config = {
@@ -28,6 +30,8 @@ export const CONFIG_POR_DEFECTO: Config = {
   mantenimiento_ultimo: "",
   correo_pausa_hasta: "",
   correo_pausa_motivo: "",
+  admin_hash: "",
+  sesion_version: "1",
 };
 
 export async function leerConfig(db: D1Database): Promise<Config> {

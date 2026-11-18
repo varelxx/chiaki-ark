@@ -196,7 +196,7 @@ export const TarjetaResultado: FC<PropsResultado> = ({ marco, tirada, token, pla
             </label>
             <label>
               {t(idioma, "discord")}
-              <input name="discord" maxlength={64} value={tirada.ark_discord ?? ""} />
+              <input name="discord" required minlength={2} maxlength={40} autocomplete="off" value={tirada.ark_discord ?? ""} />
             </label>
             <button type="submit" class="boton-secundario">
               {t(idioma, "enviar")}
@@ -410,7 +410,7 @@ const privacidadEs = (v: Vars, dias: number) => (
     <ul>
       <li>Del pedido: correo electrónico, número de pedido, importe, moneda, país y fecha.</li>
       <li>Al girar: dirección IP y país aproximado de conexión (para prevenir fraude) y el premio obtenido.</li>
-      <li>Si ganas un premio del juego: gamertag o ID, plataforma y, si lo das, tu usuario de Discord.</li>
+      <li>Si ganas un premio del juego: gamertag o ID, plataforma y usuario de Discord (para coordinar la entrega).</li>
     </ul>
     <h2>Para qué y con qué base</h2>
     <p>
@@ -447,7 +447,7 @@ const privacidadEn = (v: Vars, dias: number) => (
     <ul>
       <li>From your order: email address, order number, amount, currency, country and date.</li>
       <li>When you spin: IP address and approximate connection country (fraud prevention) and the prize you won.</li>
-      <li>If you win an in-game prize: gamertag or ID, platform and, if you provide it, your Discord username.</li>
+      <li>If you win an in-game prize: gamertag or ID, platform and Discord username (to arrange the delivery).</li>
     </ul>
     <h2>Why and on what legal basis</h2>
     <p>

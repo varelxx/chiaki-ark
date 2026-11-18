@@ -44,7 +44,20 @@ import {
   validarPedido,
   type ResultadoAutorizacion,
 } from "../servicios/pedidos";
-import { cookieSesion, crearSesion, DURACION_SESION_H, loginBloqueado, registrarFallo, sesionValida } from "../servicios/sesion";
+import {
+  cambiarContrasena,
+  cerrarTodasLasSesiones,
+  cookieSesion,
+  crearSesion,
+  DURACION_SESION_H,
+  fallosRecientes,
+  hashActivo,
+  loginBloqueado,
+  MIN_LONGITUD_CONTRASENA,
+  panelConfigurado,
+  registrarFallo,
+  sesionValida,
+} from "../servicios/sesion";
 import {
   anadirTiradasManuales,
   ESTADOS_FILTRO,
@@ -71,8 +84,33 @@ const qs = (o: Record<string, string | number | undefined | null>) => {
   const s = p.toString();
   return s ? `?${s}` : "";
 };
-const volver = (c: Ctx, ruta: string, flash: Flash) => c.redirect(ruta + (ruta.includes("?") ? "&" : "?") + qs({ ok: flash.ok, error: flash.error }).slice(1), 303);
-const flash = (c: Ctx): Flash => ({ ok: c.req.query("ok"), error: c.req.query("error") });
+/*
+ * Mensajes de aviso del panel ("Guardado", errores...). Viajan en una cookie de un solo uso, NO en la
+ * URL: así nadie puede mandarte un enlace al panel que muestre un mensaje falso.
+ */
+const COOKIE_FLASH = "ruleta_flash";
+const volver = (c: Ctx, ruta: string, f: Flash) => {
+  setCookie(c, COOKIE_FLASH, JSON.stringify({ ok: f.ok, error: f.error }), {
+    httpOnly: true,
+    secure: cookieSesion(c.req.url).segura,
+    sameSite: "Strict",
+    path: "/admin",
+    maxAge: 60,
+  });
+  return c.redirect(ruta, 303);
+};
+const flash = (c: Ctx): Flash => {
+  const valor = getCookie(c, COOKIE_FLASH);
+  if (!valor) return {};
+  deleteCookie(c, COOKIE_FLASH, { path: "/admin", secure: cookieSesion(c.req.url).segura });
+  try {
+    const f = JSON.parse(valor) as Flash;
+    const limpio = (s: unknown) => (typeof s === "string" ? s.slice(0, 600) : undefined);
+    return { ok: limpio(f.ok), error: limpio(f.error) };
+  } catch {
+    return {};
+  }
+};
 const fecha = (env: Env, iso: string | null | undefined) => formatearFecha(iso, env.ZONA_HORARIA);
 const eur = (cents: number) => formatearEur(cents);
 const texto = (v: unknown) => (typeof v === "string" ? v : "");
@@ -88,7 +126,10 @@ function vista(c: Ctx, titulo: string, contenido: Child, estado = 200, f?: Flash
   );
 }
 
-const panelConfigurado = (env: Env) => !!env.ADMIN_PASSWORD_HASH && !!env.SESSION_SECRET && env.SESSION_SECRET.length >= 32;
+async function emitirSesion(c: Ctx, version: string): Promise<void> {
+  const cookie = cookieSesion(c.req.url);
+  setCookie(c, cookie.nombre, await crearSesion(c.env, version), { httpOnly: true, secure: cookie.segura, sameSite: "Strict", path: "/", maxAge: DURACION_SESION_H * 3600 });
+}
 
 // ---------- Seguridad: origen de los POST + sesión ----------
 
@@ -104,7 +145,8 @@ const proteger = async (c: Ctx, next: () => Promise<void>) => {
   }
   c.header("Cache-Control", "no-store");
   if (c.req.path === "/admin/login") return next();
-  if (!(await sesionValida(c.env, getCookie(c, cookieSesion(c.req.url).nombre)))) {
+  const config = await leerConfig(c.env.DB);
+  if (!(await sesionValida(c.env, getCookie(c, cookieSesion(c.req.url).nombre), config.sesion_version))) {
     return c.req.method === "GET" ? c.redirect("/admin/login", 302) : c.text("La sesión ha caducado. Vuelve a entrar.", 401);
   }
   await next();
@@ -112,26 +154,25 @@ const proteger = async (c: Ctx, next: () => Promise<void>) => {
 admin.use("/admin", proteger);
 admin.use("/admin/*", proteger);
 
-admin.get("/admin/login", (c) => html(c, <PaginaLogin tienda={c.env.TIENDA_NOMBRE} sinConfigurar={!panelConfigurado(c.env)} />));
+admin.get("/admin/login", async (c) => html(c, <PaginaLogin tienda={c.env.TIENDA_NOMBRE} sinConfigurar={!panelConfigurado(c.env, await leerConfig(c.env.DB))} />));
 
 admin.post("/admin/login", async (c) => {
-  if (!panelConfigurado(c.env)) return html(c, <PaginaLogin tienda={c.env.TIENDA_NOMBRE} sinConfigurar />, 503);
+  const config = await leerConfig(c.env.DB);
+  if (!panelConfigurado(c.env, config)) return html(c, <PaginaLogin tienda={c.env.TIENDA_NOMBRE} sinConfigurar />, 503);
   const ip = ipCliente(c) ?? "desconocida";
   if (await loginBloqueado(c.env.DB, ip)) {
     return html(c, <PaginaLogin tienda={c.env.TIENDA_NOMBRE} error="Demasiados intentos. Espera 15 minutos." />, 429);
   }
   const cuerpo = await c.req.parseBody();
-  const ok = await verificarContrasena(texto(cuerpo.contrasena), c.env.ADMIN_PASSWORD_HASH!);
+  const ok = await verificarContrasena(texto(cuerpo.contrasena), hashActivo(c.env, config));
   if (!ok) {
     await registrarFallo(c.env.DB, ip);
     return html(c, <PaginaLogin tienda={c.env.TIENDA_NOMBRE} error="Contraseña incorrecta." />, 401);
   }
-  const cookie = cookieSesion(c.req.url);
-  setCookie(c, cookie.nombre, await crearSesion(c.env), { httpOnly: true, secure: cookie.segura, sameSite: "Strict", path: "/", maxAge: DURACION_SESION_H * 3600 });
+  await emitirSesion(c, config.sesion_version);
   // Sin dominio propio: la URL pública (workers.dev) se aprende sola la primera vez que entras al panel.
   if (!c.env.URL_BASE) {
     const origen = new URL(c.req.url).origin;
-    const config = await leerConfig(c.env.DB);
     if (config.url_base !== origen) await guardarConfig(c.env.DB, { url_base: origen });
   }
   return c.redirect("/admin", 303);
@@ -1663,6 +1704,102 @@ admin.post("/admin/rgpd/borrar", async (c) => {
   if (b.confirmar !== "1") return volver(c, "/admin/rgpd", { error: "Marca la casilla de confirmación." });
   const r = await borrarDatosDePersona(c.env.DB, texto(b.correo));
   return volver(c, "/admin/rgpd", { ok: `Datos borrados: ${r.pedidos} pedidos, ${r.tiradas} tiradas y ${r.correos} correos anonimizados.` });
+});
+
+// ---------- Seguridad ----------
+
+admin.get("/admin/seguridad", async (c) => {
+  const config = await leerConfig(c.env.DB);
+  const fallos = await fallosRecientes(c.env.DB);
+  const clave = claveBrevo(c.env);
+  const estado: Array<[boolean, string]> = [
+    [!!config.admin_hash, config.admin_hash ? "Contraseña del panel cambiada desde aquí." : "Sigues con la contraseña inicial (se generó al instalar y se compartió por chat): cámbiala abajo."],
+    [fallos < 10, `Intentos de acceso fallidos en las últimas 24 h: ${fallos}. Tras 5 fallos seguidos desde una misma IP se bloquea 15 minutos.`],
+    [!!clave && !esClaveSmtp(c.env), !clave ? "Falta la clave de Brevo." : esClaveSmtp(c.env) ? "La clave de Brevo es SMTP, no de API." : "Clave de Brevo guardada como secreto."],
+    [config.webhook_activo !== "1" || !!c.env.WEBHOOK_SECRET, config.webhook_activo === "1" ? "Webhook de pedidos activado (firmado con HMAC)." : "Webhook de pedidos desactivado."],
+    [true, "Enlaces de tirada: 256 bits aleatorios, guardados como hash, de un solo uso y con caducidad de 30 días."],
+    [true, "Límite de peticiones por IP en girar, formularios, login y webhook; cabeceras de seguridad (CSP, HSTS, anti-iframe) activas."],
+  ];
+  return vista(
+    c,
+    "Seguridad",
+    <>
+      <div class="tarjeta">
+        <h2>Estado</h2>
+        <ul class="lista-estado">
+          {estado.map(([ok, txt]) => (
+            <li class={ok ? "ok" : "mal"}>
+              {ok ? "✔" : "⚠"} {txt}
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div class="rejilla">
+        <form method="post" action="/admin/seguridad/contrasena" class="tarjeta">
+          <h2>Cambiar la contraseña</h2>
+          <p class="pequeno">Mínimo {MIN_LONGITUD_CONTRASENA} caracteres. Al cambiarla se cierra la sesión en todos los demás dispositivos.</p>
+          <label>
+            Contraseña actual <input type="password" name="actual" required autocomplete="current-password" />
+          </label>
+          <label>
+            Contraseña nueva <input type="password" name="nueva" required minlength={MIN_LONGITUD_CONTRASENA} autocomplete="new-password" />
+          </label>
+          <label>
+            Repite la nueva <input type="password" name="repetida" required minlength={MIN_LONGITUD_CONTRASENA} autocomplete="new-password" />
+          </label>
+          <button type="submit">Cambiar contraseña</button>
+        </form>
+        <form method="post" action="/admin/seguridad/cerrar-sesiones" class="tarjeta">
+          <h2>Sesiones abiertas</h2>
+          <p class="pequeno">
+            Si has entrado al panel desde un ordenador que no es tuyo o crees que alguien más tiene acceso, cierra la sesión en todos los dispositivos. Tú seguirás dentro en este.
+          </p>
+          <button type="submit" class="peligro" data-confirmar="¿Cerrar la sesión en todos los demás dispositivos?">
+            Cerrar sesión en todos los dispositivos
+          </button>
+        </form>
+      </div>
+      <div class="tarjeta">
+        <h2>Fuera de la app</h2>
+        <ul>
+          <li>
+            <strong>Token de API de Cloudflare</strong> usado para desplegar: cuando no necesites más despliegues, bórralo en Cloudflare → My Profile → API Tokens.
+          </li>
+          <li>
+            <strong>Clave SMTP de Brevo</strong> que se vio en una captura: si no lo has hecho ya, regenérala en Brevo → SMTP y API → SMTP.
+          </li>
+          <li>
+            Opcional y gratis: protege <code>/admin</code> con <strong>Cloudflare Access</strong> (Zero Trust, hasta 50 usuarios) para pedir un código por correo antes de la
+            contraseña.
+          </li>
+        </ul>
+      </div>
+    </>,
+  );
+});
+
+admin.post("/admin/seguridad/contrasena", async (c) => {
+  const b = await c.req.parseBody();
+  const config = await leerConfig(c.env.DB);
+  const ip = ipCliente(c) ?? "desconocida";
+  if (await loginBloqueado(c.env.DB, ip)) return volver(c, "/admin/seguridad", { error: "Demasiados intentos fallidos. Espera 15 minutos." });
+  try {
+    const version = await cambiarContrasena(c.env, config, texto(b.actual), texto(b.nueva), texto(b.repetida));
+    await emitirSesion(c, version);
+  } catch (e) {
+    if (e instanceof ErrorUsuario) {
+      if (e.estado === 401) await registrarFallo(c.env.DB, ip);
+      return volver(c, "/admin/seguridad", { error: e.message });
+    }
+    throw e;
+  }
+  return volver(c, "/admin/seguridad", { ok: "Contraseña cambiada. Se ha cerrado la sesión en los demás dispositivos." });
+});
+
+admin.post("/admin/seguridad/cerrar-sesiones", async (c) => {
+  const version = await cerrarTodasLasSesiones(c.env.DB, await leerConfig(c.env.DB));
+  await emitirSesion(c, version);
+  return volver(c, "/admin/seguridad", { ok: "Sesión cerrada en todos los demás dispositivos." });
 });
 
 // ---------- Ajustes ----------

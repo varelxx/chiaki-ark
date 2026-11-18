@@ -103,3 +103,8 @@ form.tarjeta input:not([type="checkbox"]), form.tarjeta select, form.tarjeta tex
 .enlace-generado label { display: grid; gap: 0.2rem; margin: 0 0 0.5rem; }
 .enlace-generado input, .enlace-generado textarea { width: 100%; font-family: ui-monospace, Consolas, monospace; font-size: 0.85rem; }
 .enlace-generado button { margin: 0 0 0.9rem; }
+
+.lista-estado { list-style: none; padding: 0; margin: 0; }
+.lista-estado li { padding: 0.35rem 0; border-bottom: 1px solid var(--linea); }
+.lista-estado li.ok { color: #9be3a1; }
+.lista-estado li.mal { color: var(--alerta); font-weight: 600; }
