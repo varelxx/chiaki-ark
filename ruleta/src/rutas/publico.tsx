@@ -41,7 +41,7 @@ export const segmentosDe = (premios: Premio[], idioma: Idioma): Segmento[] =>
 
 /** Página de error para el cliente. Los fallos de D1 (cupo diario agotado) dan "vuelve mañana". */
 export function paginaError(c: Ctx, e: unknown, m: Marco): Promise<Response> {
-  const contacto = c.env.CONTACTO_EMAIL;
+  const contacto = c.env.CONTACTO_EMAIL || c.env.TIENDA_URL || c.env.TIENDA_NOMBRE;
   if (e instanceof ErrorUsuario) {
     const [tit, txt]: [Parameters<typeof t>[1], Parameters<typeof t>[1]] =
       e.codigo === "revocada"

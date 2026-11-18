@@ -181,8 +181,12 @@ admin.get("/admin", async (c) => {
   const avisosConfig: string[] = [];
   if (!c.env.BREVO_API_KEY) avisosConfig.push("Falta el secreto BREVO_API_KEY: no se puede enviar ningún correo.");
   if (!urlBase(c.env, config)) avisosConfig.push("No hay URL pública para los enlaces (URL_BASE).");
-  if (!c.env.REMITENTE_EMAIL || c.env.REMITENTE_EMAIL.endsWith("example.com")) avisosConfig.push("Configura REMITENTE_EMAIL con un remitente verificado en Brevo.");
-  if (!c.env.CONTACTO_EMAIL || c.env.CONTACTO_EMAIL.endsWith("example.com")) avisosConfig.push("Configura CONTACTO_EMAIL (aparece en los textos legales).");
+  const enCloudflare = "en Cloudflare: Workers & Pages → ruleta-ark → Settings → Variables and Secrets → Add (tipo Text)";
+  if (!c.env.REMITENTE_EMAIL || c.env.REMITENTE_EMAIL.endsWith("example.com")) {
+    avisosConfig.push(`Falta REMITENTE_EMAIL (un remitente verificado en Brevo): sin él los correos esperan en la cola. Añádelo ${enCloudflare}.`);
+  }
+  if (!c.env.CONTACTO_EMAIL || c.env.CONTACTO_EMAIL.endsWith("example.com")) avisosConfig.push(`Falta CONTACTO_EMAIL (sale en los textos legales). Añádelo ${enCloudflare}.`);
+  if (!c.env.RESPONSABLE_NOMBRE) avisosConfig.push(`Falta RESPONSABLE_NOMBRE (titular de la promoción en los textos legales). Añádelo ${enCloudflare}.`);
   if (numTipos === 0) avisosConfig.push("No hay tipos de cambio: los pedidos en monedas distintas del euro no se podrán autorizar.");
   if (config.webhook_activo === "1") avisosConfig.push("El webhook de pedidos está ACTIVADO.");
   return vista(
@@ -458,6 +462,7 @@ const ResultadoAutorizar = ({ r, cola }: { r: ResultadoAutorizacion; cola: Resul
       {cola.motivo === "cupo" ? " (cupo diario de Brevo alcanzado: el resto se enviará con el cron)" : ""}
       {cola.motivo === "pausa" ? " (envíos en pausa: mira la sección Correos)" : ""}
       {cola.motivo === "sin_clave" ? " (falta BREVO_API_KEY: los correos esperan en la cola)" : ""}
+      {cola.motivo === "sin_remitente" ? " (falta REMITENTE_EMAIL: los correos esperan en la cola)" : ""}
       {cola.motivo === "sin_url" ? " (falta la URL pública: los correos esperan en la cola)" : ""}.
     </p>
     {r.rechazados.length ? (
@@ -1459,6 +1464,7 @@ admin.post("/admin/correos/procesar", async (c) => {
   const motivos: Record<string, string> = {
     pausa: "los envíos están en pausa",
     sin_clave: "falta BREVO_API_KEY",
+    sin_remitente: "falta REMITENTE_EMAIL",
     sin_url: "falta la URL pública",
     cupo: "cupo diario alcanzado",
     vacia: "la cola está vacía",
@@ -1576,7 +1582,7 @@ admin.get("/admin/ajustes", async (c) => {
         </label>
         <p class="pequeno">
           El plan gratuito de Brevo permite 300 correos al día. Los enlaces dejan de enviarse al llegar a «límite − reserva», para que los clientes que giran sigan recibiendo su
-          resultado. Remitente: {c.env.REMITENTE_EMAIL}.
+          resultado. Remitente: {c.env.REMITENTE_EMAIL || "sin configurar (variable REMITENTE_EMAIL en Cloudflare)"}.
         </p>
       </fieldset>
       <fieldset class="tarjeta">

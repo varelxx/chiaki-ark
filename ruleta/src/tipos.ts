@@ -1,6 +1,5 @@
 export interface Env {
   DB: D1Database;
-  ASSETS?: Fetcher;
 
   // Secretos (wrangler secret put ...)
   BREVO_API_KEY?: string;
@@ -12,10 +11,11 @@ export interface Env {
   URL_BASE?: string;
   TIENDA_NOMBRE: string;
   TIENDA_URL?: string;
-  REMITENTE_EMAIL: string;
+  // Datos personales: se configuran en el panel de Cloudflare (no en el repositorio público).
+  REMITENTE_EMAIL?: string;
   REMITENTE_NOMBRE?: string;
-  CONTACTO_EMAIL: string;
-  RESPONSABLE_NOMBRE: string;
+  CONTACTO_EMAIL?: string;
+  RESPONSABLE_NOMBRE?: string;
   RESPONSABLE_PAIS?: string;
   ZONA_HORARIA?: string;
   BREVO_API_URL?: string;

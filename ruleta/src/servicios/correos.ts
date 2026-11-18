@@ -101,7 +101,7 @@ export interface ResultadoCola {
   enviados: number;
   fallidos: number;
   descartados: number;
-  motivo?: "pausa" | "sin_clave" | "sin_url" | "cupo" | "vacia";
+  motivo?: "pausa" | "sin_clave" | "sin_remitente" | "sin_url" | "cupo" | "vacia";
 }
 
 export const urlBase = (env: Env, config: Config): string => (env.URL_BASE || config.url_base || "").replace(/\/+$/, "");
@@ -117,6 +117,7 @@ export async function procesarCola(env: Env, opciones: { max?: number } = {}): P
   const vacio = { enviados: 0, fallidos: 0, descartados: 0 };
   if (pausaActiva(config)) return { ...vacio, motivo: "pausa" };
   if (!env.BREVO_API_KEY) return { ...vacio, motivo: "sin_clave" };
+  if (!env.REMITENTE_EMAIL) return { ...vacio, motivo: "sin_remitente" };
   const base = urlBase(env, config);
   if (!base) return { ...vacio, motivo: "sin_url" };
 

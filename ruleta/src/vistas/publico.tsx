@@ -1,3 +1,4 @@
+import { urlEstatico } from "../rutas/estaticos";
 import type { FC, PropsWithChildren } from "hono/jsx";
 import { raw } from "hono/html";
 import { formatearEur } from "../lib/dinero";
@@ -34,9 +35,9 @@ export const PaginaPublica: FC<PropsWithChildren<{ marco: Marco; titulo: string;
         <meta name="referrer" content="same-origin" />
         <meta name="color-scheme" content="dark" />
         <title>{`${titulo} · ${env.TIENDA_NOMBRE}`}</title>
-        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-        <link rel="stylesheet" href="/css/app.css" />
-        {script ? <script src="/js/ruleta.js" defer></script> : null}
+        <link rel="icon" href={urlEstatico("/favicon.svg")} type="image/svg+xml" />
+        <link rel="stylesheet" href={urlEstatico("/css/app.css")} />
+        {script ? <script src={urlEstatico("/js/ruleta.js")} defer></script> : null}
       </head>
       <body class={`tema-${tema} ${tema2 ? `tema2-${tema2}` : ""}`}>
         <div class="fondo" aria-hidden="true"></div>
@@ -273,9 +274,9 @@ export const PaginaLegal: FC<{ marco: Marco; tipo: "terminos" | "privacidad"; ru
   const { idioma, env } = marco;
   const v = {
     tienda: env.TIENDA_NOMBRE,
-    titular: env.RESPONSABLE_NOMBRE,
+    titular: env.RESPONSABLE_NOMBRE || env.TIENDA_NOMBRE,
     pais: env.RESPONSABLE_PAIS ? nombrePais(env.RESPONSABLE_PAIS, idioma) : "",
-    contacto: env.CONTACTO_EMAIL,
+    contacto: env.CONTACTO_EMAIL ?? "",
   };
   const tramos = ruletas
     .filter((r) => r.activa === 1)
@@ -301,7 +302,7 @@ export const PaginaLegal: FC<{ marco: Marco; tipo: "terminos" | "privacidad"; ru
 
 type Vars = { tienda: string; titular: string; pais: string; contacto: string };
 
-const correo = (c: string) => <a href={`mailto:${c}`}>{c}</a>;
+const correo = (c: string) => (c ? <a href={`mailto:${c}`}>{c}</a> : <span>—</span>);
 
 const terminosEs = (v: Vars, tramos: string[], paises: string | null) => (
   <>

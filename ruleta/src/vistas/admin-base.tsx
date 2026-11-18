@@ -1,3 +1,4 @@
+import { urlEstatico } from "../rutas/estaticos";
 import type { FC, PropsWithChildren } from "hono/jsx";
 
 const SECCIONES: Array<[string, string]> = [
@@ -26,9 +27,9 @@ export const LayoutAdmin: FC<PropsWithChildren<{ titulo: string; ruta: string; f
       <meta name="robots" content="noindex, nofollow" />
       <meta name="referrer" content="same-origin" />
       <title>{`${titulo} · Panel · ${tienda}`}</title>
-      <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-      <link rel="stylesheet" href="/css/admin.css" />
-      <script src="/js/admin.js" defer></script>
+      <link rel="icon" href={urlEstatico("/favicon.svg")} type="image/svg+xml" />
+      <link rel="stylesheet" href={urlEstatico("/css/admin.css")} />
+      <script src={urlEstatico("/js/admin.js")} defer></script>
     </head>
     <body>
       <header class="barra">
@@ -69,8 +70,8 @@ export const PaginaLogin: FC<{ error?: string; tienda: string; sinConfigurar?: b
       <meta name="viewport" content="width=device-width, initial-scale=1" />
       <meta name="robots" content="noindex, nofollow" />
       <title>{`Entrar · ${tienda}`}</title>
-      <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-      <link rel="stylesheet" href="/css/admin.css" />
+      <link rel="icon" href={urlEstatico("/favicon.svg")} type="image/svg+xml" />
+      <link rel="stylesheet" href={urlEstatico("/css/admin.css")} />
     </head>
     <body class="login">
       <form method="post" action="/admin/login" class="tarjeta login-form">

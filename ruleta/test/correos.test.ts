@@ -92,6 +92,16 @@ describe("cupo diario de Brevo", () => {
     expect((await leerConfig(env.DB)).mantenimiento_ultimo).toBe(diaUtc());
   });
 
+  it("sin REMITENTE_EMAIL los correos esperan en la cola (no se pierden)", async () => {
+    const brevo = simularBrevo();
+    await manual("espera-remitente@ejemplo.test");
+    const r = await procesarCola({ ...env, REMITENTE_EMAIL: undefined });
+    expect(r.motivo).toBe("sin_remitente");
+    expect(brevo.llamadas).toHaveLength(0);
+    expect(await enCola()).toBe(1);
+    expect((await procesarCola(env)).enviados).toBe(1);
+  });
+
   it("correos en el idioma del cliente", async () => {
     const brevo = simularBrevo();
     await anadirTiradasManuales(env.DB, { correo: "en@ejemplo.test", ruletaId: 2, cantidad: 1, idioma: "en", pais: "" });

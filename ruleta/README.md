@@ -7,11 +7,32 @@ Todo funciona con **planes gratuitos**:
 | Pieza | Servicio gratuito |
 |---|---|
 | Web, API y cron | Cloudflare Workers (plan Free) en `https://ruleta-ark.<tu-subdominio>.workers.dev` |
-| Base de datos | Cloudflare D1 (SQLite) |
+| Base de datos | Cloudflare D1 (SQLite), con jurisdicción UE |
 | Correos | Brevo, plan gratuito (300 correos/día) por API |
-| CSS, JS y tipografía | Workers Static Assets (no cuentan como peticiones al Worker) |
+| CSS, JS y tipografía | Incrustados en el propio Worker, con caché de un año en el navegador |
 
 No usa Vercel ni ningún servicio de pago, ni dominio propio.
+
+### Despliegue actual
+
+| | |
+|---|---|
+| Ruleta | https://ruleta-ark.varel-rewards.workers.dev |
+| Panel | https://ruleta-ark.varel-rewards.workers.dev/admin |
+| Base de datos | D1 `ruleta-ark`, jurisdicción `eu` |
+| Cron | cada 10 minutos (cola de correos y mantenimiento diario) |
+
+**Pendiente antes de que salgan correos** (en Cloudflare: **Workers & Pages → ruleta-ark → Settings → Variables and Secrets → Add**):
+
+| Nombre | Tipo | Qué es |
+|---|---|---|
+| `BREVO_API_KEY` | Secret | Clave API de Brevo |
+| `REMITENTE_EMAIL` | Text | Remitente verificado en Brevo |
+| `CONTACTO_EMAIL` | Text | Correo de contacto y privacidad (sale en los textos legales) |
+| `RESPONSABLE_NOMBRE` | Text | Titular de la promoción: nombre o razón social |
+| `TIENDA_URL` | Text | (Opcional) web de la tienda |
+
+Estos datos no van en `wrangler.jsonc` porque el repositorio es público. Gracias a `keep_vars`, los despliegues no los borran. Mientras falten, la ruleta funciona, los correos esperan en la cola y el panel avisa de lo que falta.
 
 > [!WARNING]
 > **Antes de lanzar, revisa con un abogado la normativa de CADA país donde vendes sobre premios aleatorios ligados a compras** (sorteos promocionales, «loot boxes», combinaciones aleatorias con fines publicitarios, protección de menores, impuestos sobre premios…). En algunos países este tipo de promociones necesita autorización o está prohibido. Los textos legales que trae la app son **plantillas**. Usa la lista de **países bloqueados** del panel para excluir los países donde no puedas hacer la promoción.
@@ -74,25 +95,36 @@ npx wrangler login            # abre el navegador para autorizar tu cuenta de Cl
 ### 2.2 Crear la base de datos D1
 
 ```bash
-npx wrangler d1 create ruleta-ark
+npx wrangler d1 create ruleta-ark --jurisdiction eu   # datos guardados y procesados en la UE (RGPD)
 ```
 
-Copia el `database_id` que te devuelve y pégalo en `wrangler.jsonc`, en lugar de `00000000-0000-0000-0000-000000000000`. Después crea las tablas y los datos de ejemplo:
+Copia el `database_id` que te devuelve y pégalo en `wrangler.jsonc` (el actual es el de la cuenta de Varel Rewards). Después crea las tablas y los datos de ejemplo:
 
 ```bash
 npm run db:migrate:remote     # = wrangler d1 migrations apply DB --remote
 ```
 
-### 2.3 Rellenar tus datos en `wrangler.jsonc` → `vars`
+### 2.3 Rellenar tus datos
+
+En `wrangler.jsonc` → `vars` (datos no personales, se guardan en el repositorio):
 
 | Variable | Qué poner |
 |---|---|
-| `TIENDA_NOMBRE`, `TIENDA_URL` | Nombre y web de tu tienda (salen en la página y los correos) |
-| `REMITENTE_EMAIL`, `REMITENTE_NOMBRE` | Remitente **verificado en Brevo** |
-| `CONTACTO_EMAIL` | Correo para dudas y peticiones de privacidad (sale en los textos legales) |
-| `RESPONSABLE_NOMBRE`, `RESPONSABLE_PAIS` | Titular de la promoción (nombre o razón social) y país (código ISO, p. ej. `ES`) |
+| `TIENDA_NOMBRE`, `REMITENTE_NOMBRE` | Nombre de la tienda y del remitente (salen en la página y los correos) |
+| `RESPONSABLE_PAIS` | País del titular (código ISO, p. ej. `ES`) |
 | `ZONA_HORARIA` | Para mostrar fechas (por defecto `Europe/Madrid`) |
-| `URL_BASE` | Déjala vacía: se aprende sola la primera vez que entras al panel desde workers.dev |
+| `URL_BASE` | La URL de workers.dev (si la dejas vacía, se aprende sola la primera vez que entras al panel) |
+
+En Cloudflare (**Workers & Pages → ruleta-ark → Settings → Variables and Secrets → Add**, tipo *Text*), los datos personales, para no publicarlos en el repositorio:
+
+| Variable | Qué poner |
+|---|---|
+| `REMITENTE_EMAIL` | Remitente **verificado en Brevo** |
+| `CONTACTO_EMAIL` | Correo para dudas y peticiones de privacidad (sale en los textos legales) |
+| `RESPONSABLE_NOMBRE` | Titular de la promoción (nombre o razón social) |
+| `TIENDA_URL` | (Opcional) web de la tienda |
+
+`keep_vars: true` hace que `wrangler deploy` no borre las variables añadidas en el panel de Cloudflare.
 
 ### 2.4 Preparar Brevo
 
@@ -190,7 +222,7 @@ Valores del plan gratuito tal como los conocía al escribir esto. **Compruébalo
 |---|---|---|
 | Brevo: correos/día | 300 | Cuenta los envíos por día UTC. Al llegar a «límite − reserva» los enlaces esperan en la cola; la reserva (20 por defecto) queda para los correos de resultado de los giros. El cron reintenta cada 10 minutos. Si Brevo responde «sin créditos», la cola se pausa 1 hora y no se pierde nada. El panel avisa al 80 %. |
 | D1: filas leídas/escritas por día | ~5 M / ~100 k | Si D1 rechaza una consulta, el cliente ve «Ruleta no disponible hoy, vuelve mañana». Cada giro es una única transacción (lote de D1): o se aplica entero o no se aplica, así que **la tirada sigue pendiente** y el enlace seguirá funcionando. |
-| Workers: peticiones/día | ~100 k | Los archivos estáticos no cuentan. Si se superan, Cloudflare muestra su propia página de error (no se puede personalizar en el plan gratuito). |
+| Workers: peticiones/día | ~100 k | CSS, JS y fuentes los sirve el Worker con caché de un año y versión en la URL, así que cada visitante los descarga una sola vez. Si se superan, Cloudflare muestra su propia página de error (no se puede personalizar en el plan gratuito). |
 | Workers: CPU por petición | ~10 ms | La contraseña usa PBKDF2 con 30.000 iteraciones (unos 5 ms medidos en workerd). |
 | Workers: subpeticiones por invocación | ~50 | Se envían como máximo 25 correos por ejecución; el resto sigue el cron. |
 | Cron triggers por cuenta | ~5 | La app usa 1. |
@@ -222,6 +254,9 @@ Valores del plan gratuito tal como los conocía al escribir esto. **Compruébalo
 - **Contraseña**: PBKDF2-SHA256 con 30.000 iteraciones. Es un compromiso con el límite de CPU del plan gratuito; por eso el script genera por defecto una contraseña aleatoria larga. Además, 5 intentos fallidos por IP (y 50 en total) bloquean 15 minutos.
 - **Día de Brevo = día UTC** (hay fuentes que dicen que el cupo se renueva a las 00:00 UTC; compruébalo en tu cuenta). La app también se para si Brevo dice que no quedan créditos, así que un desfase de horario no hace perder correos.
 - **Tipografía Rajdhani (licencia OFL) servida desde tu propio Worker**, sin Google Fonts, porque cargar fuentes de Google desde la UE ha dado problemas con el RGPD. La página pública **no usa cookies** ni analítica.
+- **CSS, JS, fuentes e icono incrustados en el Worker** (`scripts/generar-estaticos.mjs`, que wrangler ejecuta antes de empaquetar) en vez de usar Workers Static Assets. Así el despliegue es un único script y funciona igual desde cualquier sitio, también desde entornos donde la subida de archivos estáticos de Cloudflare no es posible. El coste son unas pocas peticiones por visitante nuevo.
+- **Base de datos con jurisdicción UE** (`--jurisdiction eu`): los datos de los clientes se guardan y procesan dentro de la Unión Europea.
+- **Datos personales del titular fuera del repositorio** (que es público): se configuran como variables en Cloudflare y `keep_vars` evita que un despliegue los borre.
 - **Sin dominio propio**, los enlaces son `*.workers.dev`. Algunos filtros de spam desconfían de esos enlaces; ver la sección 10.
 
 ---
@@ -246,7 +281,7 @@ Valores del plan gratuito tal como los conocía al escribir esto. **Compruébalo
 cp .env.example .dev.vars            # y rellénalo (npm run hash-password para el hash)
 npm run db:migrate:local
 npm run dev                          # http://localhost:8787  ·  panel en /admin
-npm test                             # 59 tests en el runtime real de Workers (Miniflare + D1 local)
+npm test                             # 63 tests en el runtime real de Workers (Miniflare + D1 local)
 npm run typecheck
 ```
 
@@ -269,7 +304,7 @@ Los tests (`test/`) nunca llaman a Brevo de verdad. Cubren:
 ```
 ruleta/
 ├── migrations/            0001_esquema.sql, 0002_datos_ejemplo.sql
-├── public/                css, js, fuentes (OFL), favicon, _headers
+├── public/                css, js, fuentes (OFL), favicon (se incrustan en el Worker al empaquetar)
 ├── scripts/hash-password.mjs
 ├── src/
 │   ├── index.tsx          Hono + cabeceras de seguridad + manejo de errores de D1 + cron

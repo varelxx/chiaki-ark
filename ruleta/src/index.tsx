@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { esErrorD1, esLimiteD1 } from "./lib/errores";
 import { elegirIdioma, t } from "./lib/i18n";
 import { admin } from "./rutas/admin";
+import { estaticos } from "./rutas/estaticos";
 import { publico } from "./rutas/publico";
 import type { App } from "./rutas/util";
 import { webhook } from "./rutas/webhook";
@@ -26,6 +27,7 @@ app.use("*", async (c, next) => {
   if (!c.res.headers.has("Cache-Control")) c.header("Cache-Control", "no-store");
 });
 
+app.route("/", estaticos);
 app.route("/", publico);
 app.route("/", admin);
 app.route("/", webhook);

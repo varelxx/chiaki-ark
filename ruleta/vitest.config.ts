@@ -1,6 +1,10 @@
 import { pbkdf2Sync, randomBytes } from "node:crypto";
 import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-plugin";
 import { defineConfig } from "vitest/config";
+import { generarEstaticos } from "./scripts/generar-estaticos.mjs";
+
+// El Worker sirve CSS/JS/fuentes incrustados: se regeneran desde public/ antes de los tests.
+generarEstaticos();
 
 // Contraseña SOLO para los tests. En producción el hash se genera con `npm run hash-password`.
 const CONTRASENA_TEST = "contraseña-de-pruebas-larga";

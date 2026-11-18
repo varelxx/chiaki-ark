@@ -7,8 +7,9 @@
   // Sin dominio propio: se publica en https://ruleta-ark.<tu-subdominio>.workers.dev
   "workers_dev": true,
   "preview_urls": false,
-  // CSS, JS, fuentes e iconos se sirven como archivos estáticos (no cuentan como peticiones al Worker).
-  "assets": { "directory": "./public", "binding": "ASSETS" },
+  // CSS, JS, fuentes e icono de public/ se incrustan en el Worker antes de empaquetar
+  // (scripts/generar-estaticos.mjs) y se sirven con caché de un año y versión en la URL.
+  "build": { "command": "node scripts/generar-estaticos.mjs", "watch_dir": "public" },
   "d1_databases": [
     {
       "binding": "DB",
@@ -22,18 +23,20 @@
   // Cola de correos y mantenimiento diario. Usa 1 de los cron triggers gratuitos de la cuenta.
   "triggers": { "crons": ["*/10 * * * *"] },
   "observability": { "enabled": true },
+  // Conserva las variables añadidas en el panel de Cloudflare al volver a desplegar.
+  "keep_vars": true,
   "vars": {
-    // URL pública. Si la dejas vacía, se aprende sola la primera vez que entras al panel.
-    "URL_BASE": "",
-    "TIENDA_NOMBRE": "Mi Tienda",
-    "TIENDA_URL": "https://example.com",
-    // Remitente verificado en Brevo (idealmente de un dominio con DKIM/DMARC configurados en Brevo).
-    "REMITENTE_EMAIL": "ruleta@example.com",
-    "REMITENTE_NOMBRE": "Mi Tienda",
-    // Datos del responsable para los términos y la política de privacidad.
-    "CONTACTO_EMAIL": "privacidad@example.com",
-    "RESPONSABLE_NOMBRE": "Nombre y apellidos o razón social",
+    // URL pública (si la dejas vacía, se aprende sola la primera vez que entras al panel).
+    "URL_BASE": "https://ruleta-ark.varel-rewards.workers.dev",
+    "TIENDA_NOMBRE": "Varel Rewards",
+    "REMITENTE_NOMBRE": "Varel Rewards",
     "RESPONSABLE_PAIS": "ES",
     "ZONA_HORARIA": "Europe/Madrid"
+    // Los datos personales NO van aquí (el repositorio es público). Añádelos en Cloudflare:
+    // Workers & Pages → ruleta-ark → Settings → Variables and Secrets → Add (tipo Text):
+    //   REMITENTE_EMAIL     remitente verificado en Brevo
+    //   CONTACTO_EMAIL      correo de contacto y privacidad (sale en los textos legales)
+    //   RESPONSABLE_NOMBRE  titular de la promoción (nombre o razón social)
+    //   TIENDA_URL          (opcional) web de la tienda
   }
 }
