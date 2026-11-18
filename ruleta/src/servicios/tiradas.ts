@@ -1,9 +1,9 @@
 import { AzarCripto, elegirPonderado, type FuenteAzar } from "../lib/azar";
-import { FORMATO_TOKEN, hashToken, idAleatorio } from "../lib/cripto";
+import { FORMATO_TOKEN, generarToken, hashToken, idAleatorio } from "../lib/cripto";
 import { ErrorUsuario, esRestriccion } from "../lib/errores";
 import { normalizarPais } from "../lib/paises";
 import { estaDisponible } from "../lib/probabilidades";
-import { ahora } from "../lib/tiempo";
+import { ahora, sumarDias } from "../lib/tiempo";
 import type { Idioma, Premio, Ruleta, Tirada } from "../tipos";
 import type { Config } from "./config";
 import { normalizarCorreo } from "./pedidos";
@@ -100,7 +100,8 @@ export async function girar(db: D1Database, token: string, op: OpcionesGiro): Pr
       db
         .prepare(
           `INSERT INTO correos (tipo, destinatario, idioma, tirada_ids, estado, creado_en)
-           SELECT 'resultado', correo, idioma, json_array(id), 'pendiente', ?3 FROM tiradas WHERE id = ?1 AND giro_nonce = ?2`,
+           SELECT 'resultado', correo, idioma, json_array(id), 'pendiente', ?3 FROM tiradas
+           WHERE id = ?1 AND giro_nonce = ?2 AND correo <> ''`, // los enlaces directos no tienen correo
         )
         .bind(tirada.id, nonce, momento),
     ];
@@ -174,6 +175,46 @@ export async function guardarDatosArk(db: D1Database, token: string, datos: Dato
   return (await db.prepare("SELECT * FROM tiradas WHERE id = ?1").bind(tirada.id).first<Tirada>())!;
 }
 
+export const MAX_ENLACES_DIRECTOS = 20;
+
+export interface EnlacesGenerados {
+  ruleta: Ruleta;
+  tokens: string[];
+  expira: string;
+  idioma: Idioma;
+}
+
+/**
+ * Enlaces directos: tiradas de una ruleta concreta, sin pedido ni correo, para que la tienda envíe
+ * el enlace a mano. Cada enlace es de un solo giro y caduca a los 30 días. Como solo se guarda el
+ * hash, el enlace en claro se muestra una única vez (en la respuesta del panel).
+ */
+export async function generarEnlacesDirectos(
+  db: D1Database,
+  e: { ruletaId: number; cantidad: number; idioma: unknown; nota: unknown },
+): Promise<EnlacesGenerados> {
+  const cantidad = Math.floor(Number(e.cantidad));
+  if (!(cantidad >= 1 && cantidad <= MAX_ENLACES_DIRECTOS)) throw new ErrorUsuario(`El número de enlaces debe estar entre 1 y ${MAX_ENLACES_DIRECTOS}.`);
+  const idioma: Idioma = e.idioma === "en" ? "en" : "es";
+  const nota = String(e.nota ?? "").trim().slice(0, 80) || null;
+  if (nota && /[\u0000-\u001f]/.test(nota)) throw new ErrorUsuario("La nota no es válida.");
+  const ruleta = await ruletaPorId(db, e.ruletaId);
+  if (!ruleta) throw new ErrorUsuario("Ruleta no encontrada.");
+
+  const tokens = Array.from({ length: cantidad }, () => generarToken());
+  const hashes = await Promise.all(tokens.map((tok) => hashToken(tok)));
+  const momento = ahora();
+  const expira = sumarDias(momento, DIAS_CADUCIDAD);
+  await db
+    .prepare(
+      `INSERT INTO tiradas (pedido_id, correo, pais, idioma, ruleta_id, origen, estado, token_hash, expira_en, enviada_en, creada_en, nota)
+       SELECT NULL, '', NULL, ?1, ?2, 'manual', 'pendiente', value, ?3, ?4, ?4, ?5 FROM json_each(?6)`,
+    )
+    .bind(idioma, ruleta.id, expira, momento, nota, JSON.stringify(hashes))
+    .run();
+  return { ruleta, tokens, expira, idioma };
+}
+
 export const MAX_TIRADAS_MANUALES = 20;
 
 export async function anadirTiradasManuales(
@@ -221,7 +262,7 @@ export async function reenviarTiradas(db: D1Database, ids: number[]): Promise<nu
       `INSERT INTO correos (tipo, destinatario, idioma, tirada_ids, estado, creado_en)
        SELECT 'enlace', t.correo, t.idioma, json_group_array(t.id), 'pendiente', ?2
        FROM tiradas t
-       WHERE t.id IN (SELECT value FROM json_each(?1)) AND t.estado = 'pendiente'
+       WHERE t.id IN (SELECT value FROM json_each(?1)) AND t.estado = 'pendiente' AND t.correo <> ''
          AND NOT EXISTS (
            SELECT 1 FROM correos c, json_each(c.tirada_ids) x
            WHERE c.tipo = 'enlace' AND c.estado IN ('pendiente', 'enviando') AND x.value = t.id)

@@ -168,6 +168,7 @@ Opcional y gratuito: protege `/admin/*` con **Cloudflare Access** (Zero Trust, g
 ## 3. Uso diario
 
 - **Pedidos**: alta manual o **Importar CSV**. Los pedidos entran como *pendientes de autorizar* y no se envía nada hasta que pulses **Autorizar marcados** o **Autorizar todos los elegibles** (hasta 200 cada vez). Cada fila te dice si es elegible o por qué no: no llega al mínimo, país bloqueado, falta el tipo de cambio o está fuera de campaña.
+- **Enlaces directos**: para dar una tirada sin meter datos del cliente. Eliges la ruleta (hay un botón por ruleta), una nota opcional para saber a quién se lo das y el idioma, y el panel te da el enlace y un **mensaje listo para copiar** y enviar por WhatsApp, Discord o el chat de tu tienda. Cada enlace sirve para **un solo giro** y caduca a los 30 días. Sin correo no hay email de resultado: el cliente lo ve en la página. Por seguridad el enlace solo se muestra al crearlo; si se pierde, revoca esa tirada y genera otro.
 - **Tiradas e historial**: fecha, pedido, correo, país, ruleta, premio, estado (pendiente / usada / entregada / revocada / caducada) e IP. Desde aquí puedes **reenviar** el enlace (genera uno nuevo y el anterior deja de valer), **revocar** tiradas pendientes, **marcar como entregados** los premios de ARK, **exportar a CSV** y **añadir N tiradas a mano** a un correo, sin pedido.
 - **Correos**: contador de envíos del día frente al límite de 300 (avisa al 80 %), cola, errores, reintentos y botón «Enviar la cola ahora».
 - **RGPD**: busca un correo para ver sus datos, exportarlos o borrarlos a petición.
@@ -281,7 +282,7 @@ Valores del plan gratuito tal como los conocía al escribir esto. **Compruébalo
 cp .env.example .dev.vars            # y rellénalo (npm run hash-password para el hash)
 npm run db:migrate:local
 npm run dev                          # http://localhost:8787  ·  panel en /admin
-npm test                             # 63 tests en el runtime real de Workers (Miniflare + D1 local)
+npm test                             # 68 tests en el runtime real de Workers (Miniflare + D1 local)
 npm run typecheck
 ```
 
@@ -298,6 +299,7 @@ Los tests (`test/`) nunca llaman a Brevo de verdad. Cubren:
 | `coste.test.ts` | **Límite de coste**: 0,655 / 1,375 / 3,10 €, aviso con los pesos configurados y con el stock real, el panel guarda y avisa, exige que la suma sea 100 % |
 | `correos.test.ts` | Cupo diario (cola y envío al día siguiente), reserva para resultados, pausa si Brevo responde 402, reintentos, aviso al 80 %, cron, idioma |
 | `panel.test.ts` | Login, bloqueo por intentos, cookie segura, CSRF, CSV → autorizar → correos, exportación CSV, «entregado», borrado RGPD, webhook desactivado/firmado, lector de CSV |
+| `enlaces.test.ts` | Enlaces directos: uno por ruleta desde el panel, token hasheado, un solo giro, sin correos, nota en el historial, validaciones |
 
 ### Estructura
 

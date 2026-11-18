@@ -48,6 +48,8 @@ import { cookieSesion, crearSesion, DURACION_SESION_H, loginBloqueado, registrar
 import {
   anadirTiradasManuales,
   ESTADOS_FILTRO,
+  generarEnlacesDirectos,
+  MAX_ENLACES_DIRECTOS,
   listarHistorial,
   marcarEntregadas,
   MAX_TIRADAS_MANUALES,
@@ -519,6 +521,106 @@ admin.post("/admin/pedidos/acciones", async (c) => {
   return volver(c, "/admin/pedidos", { error: "Acción desconocida." });
 });
 
+// ---------- Enlaces directos ----------
+
+admin.get("/admin/enlaces", async (c) => {
+  const ruletas = (await listarRuletas(c.env.DB)).filter((r) => r.activa === 1);
+  return vista(
+    c,
+    "Enlaces directos",
+    <>
+      <p>
+        Genera un enlace de <strong>un solo giro</strong> para una ruleta y mándaselo tú al cliente por donde quieras (WhatsApp, Discord, el chat de la tienda…), sin
+        rellenar sus datos. Caduca a los 30 días. Como no hay correo, el cliente ve el resultado en la propia página; si le toca un objeto de ARK, rellena allí su gamertag y
+        plataforma.
+      </p>
+      <p class="pequeno">
+        Por seguridad, el enlace solo se puede ver al crearlo. Si lo pierdes, revoca esa tirada en <a href="/admin/tiradas?estado=pendiente">Tiradas e historial</a> y genera
+        otro.
+      </p>
+      <div class="rejilla">
+        {ruletas.map((r) => (
+          <form method="post" action="/admin/enlaces" class="tarjeta">
+            <h2>{r.nombre}</h2>
+            <p class="pequeno">Equivale a pedidos desde {eur(r.umbral_cents)}.</p>
+            <input type="hidden" name="ruleta" value={r.id} />
+            <label>
+              Nota (opcional, para saber a quién se lo das)
+              <input name="nota" maxlength={80} placeholder="Juan · pedido de Wallapop" />
+            </label>
+            <label>
+              Idioma de la página
+              <select name="idioma">
+                <option value="es">Español</option>
+                <option value="en">English</option>
+              </select>
+            </label>
+            <label>
+              Cuántos enlaces
+              <input name="cantidad" type="number" min={1} max={MAX_ENLACES_DIRECTOS} value="1" required />
+            </label>
+            <button type="submit">Generar enlace</button>
+          </form>
+        ))}
+      </div>
+    </>,
+  );
+});
+
+admin.post("/admin/enlaces", async (c) => {
+  const b = await c.req.parseBody();
+  let r;
+  try {
+    r = await generarEnlacesDirectos(c.env.DB, { ruletaId: Number(b.ruleta), cantidad: Number(b.cantidad), idioma: b.idioma, nota: b.nota });
+  } catch (e) {
+    if (e instanceof ErrorUsuario) return volver(c, "/admin/enlaces", { error: e.message });
+    throw e;
+  }
+  const base = urlBase(c.env, await leerConfig(c.env.DB)) || new URL(c.req.url).origin;
+  const fechaCaducidad = formatearFecha(r.expira, c.env.ZONA_HORARIA, r.idioma, false);
+  const nombreRuleta = r.idioma === "en" ? r.ruleta.nombre_en || r.ruleta.nombre : r.ruleta.nombre;
+  const mensaje = (url: string) =>
+    r.idioma === "en"
+      ? `Thank you for your purchase at ${c.env.TIENDA_NOMBRE}! You have a spin on our wheel (${nombreRuleta}):\n${url}\nThe link is personal, works only once and expires on ${fechaCaducidad}.`
+      : `¡Gracias por tu compra en ${c.env.TIENDA_NOMBRE}! Tienes una tirada en nuestra ruleta (${nombreRuleta}):\n${url}\nEl enlace es personal, solo sirve una vez y caduca el ${fechaCaducidad}.`;
+  return vista(
+    c,
+    r.tokens.length === 1 ? "Enlace generado" : `${r.tokens.length} enlaces generados`,
+    <>
+      <p class="flash ok">
+        {r.ruleta.nombre} · un solo giro por enlace · caduca el {fechaCaducidad}. <strong>Cópialo ahora:</strong> por seguridad no se podrá volver a ver.
+      </p>
+      {r.tokens.map((tok, i) => {
+        const url = `${base}/tirada/${tok}`;
+        return (
+          <div class="tarjeta enlace-generado">
+            {r.tokens.length > 1 ? <h3>Enlace {i + 1}</h3> : null}
+            <label>
+              Enlace
+              <input id={`enlace-${i}`} value={url} readonly />
+            </label>
+            <button type="button" data-copiar={`enlace-${i}`}>
+              Copiar enlace
+            </button>
+            <label>
+              Mensaje listo para enviar
+              <textarea id={`mensaje-${i}`} rows={5} readonly>
+                {mensaje(url)}
+              </textarea>
+            </label>
+            <button type="button" class="secundario" data-copiar={`mensaje-${i}`}>
+              Copiar mensaje
+            </button>
+          </div>
+        );
+      })}
+      <p>
+        <a href="/admin/enlaces">Generar más</a> · <a href="/admin/tiradas?estado=pendiente">Ver tiradas pendientes</a>
+      </p>
+    </>,
+  );
+});
+
 // ---------- Tiradas e historial ----------
 
 function filtroHistorial(c: Ctx): FiltroHistorial {
@@ -537,6 +639,7 @@ function estadoLegible(f: FilaHistorial, momento: string): string {
   switch (f.estado) {
     case "pendiente":
       if (f.expira_en && f.expira_en <= momento) return "Caducada";
+      if (!f.correo) return "Pendiente · enlace directo";
       if (f.enlace_en_cola) return "Pendiente · enlace en cola";
       return f.enviada_en ? "Pendiente" : "Pendiente · sin enviar";
     case "usada":
@@ -643,7 +746,10 @@ admin.get("/admin/tiradas", async (c) => {
                   {t.usada_en ? <small class="bloque">Giro: {fecha(c.env, t.usada_en)}</small> : null}
                 </td>
                 <td>{t.pedido_numero ?? <em>manual</em>}</td>
-                <td>{t.correo}</td>
+                <td>
+                  {t.correo || <em>enlace directo</em>}
+                  {t.nota ? <small class="bloque">{t.nota}</small> : null}
+                </td>
                 <td>{t.pais ?? ""}</td>
                 <td>{t.ruleta_nombre}</td>
                 <td>
@@ -717,7 +823,7 @@ admin.get("/admin/tiradas.csv", async (c) => {
   const { filas } = await listarHistorial(c.env.DB, f, 20_000);
   const momento = ahora();
   const csv = escribirCsv(
-    ["id", "creada_en", "girada_en", "pedido", "correo", "pais", "ruleta", "premio", "tipo", "coste_eur", "cupon", "estado", "ip", "pais_ip", "gamertag", "plataforma", "discord", "entregada_en"],
+    ["id", "creada_en", "girada_en", "pedido", "correo", "pais", "ruleta", "premio", "tipo", "coste_eur", "cupon", "estado", "ip", "pais_ip", "gamertag", "plataforma", "discord", "entregada_en", "nota"],
     filas.map((t) => [
       t.id,
       t.creada_en,
@@ -737,6 +843,7 @@ admin.get("/admin/tiradas.csv", async (c) => {
       t.ark_plataforma,
       t.ark_discord,
       t.entregada_en,
+      t.nota,
     ]),
   );
   return c.body(csv, 200, { "content-type": "text/csv; charset=utf-8", "content-disposition": `attachment; filename="historial-${momento.slice(0, 10)}.csv"` });

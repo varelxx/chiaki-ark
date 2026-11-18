@@ -4,6 +4,7 @@ import type { FC, PropsWithChildren } from "hono/jsx";
 const SECCIONES: Array<[string, string]> = [
   ["/admin", "Resumen"],
   ["/admin/pedidos", "Pedidos"],
+  ["/admin/enlaces", "Enlaces directos"],
   ["/admin/tiradas", "Tiradas e historial"],
   ["/admin/premios", "Premios"],
   ["/admin/tramos", "Tramos"],

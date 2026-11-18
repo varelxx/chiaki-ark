@@ -211,6 +211,7 @@ export async function procesarCola(env: Env, opciones: { max?: number } = {}): P
       const t = tiradas.get(ids[0]);
       if (t && t.premio_id) listo = correoResultado(env, base, t, ruletas.get(t.ruleta_id)!, t.pedido_numero);
     }
+    if (!c.destinatario.includes("@")) listo = null; // enlaces directos (sin correo) o datos borrados por RGPD
     if (!listo) {
       // Las tiradas se revocaron o ya se usaron: no hay nada que enviar.
       finales.push(db.prepare("UPDATE correos SET estado = 'descartado', ultimo_error = 'Sin tiradas pendientes' WHERE id = ?1").bind(c.id));

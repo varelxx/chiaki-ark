@@ -97,4 +97,6 @@ export interface Tirada {
   ark_discord: string | null;
   ark_datos_en: string | null;
   entregada_en: string | null;
+  /** Nota del panel para enlaces directos (a quién se le dio). Los enlaces directos tienen correo = "". */
+  nota: string | null;
 }

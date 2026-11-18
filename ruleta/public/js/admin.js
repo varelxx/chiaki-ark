@@ -13,4 +13,25 @@
     const b = ev.target.closest("[data-confirmar]");
     if (b && !window.confirm(b.dataset.confirmar)) ev.preventDefault();
   });
+  // Botones "Copiar" (enlaces directos): copia el valor del campo indicado.
+  document.addEventListener("click", async (ev) => {
+    const b = ev.target.closest("[data-copiar]");
+    if (!b) return;
+    const campo = document.getElementById(b.dataset.copiar);
+    if (!campo) return;
+    const texto = campo.value ?? campo.textContent;
+    try {
+      await navigator.clipboard.writeText(texto);
+    } catch {
+      campo.select(); // sin permiso de portapapeles: deja el texto seleccionado para Ctrl+C
+      return;
+    }
+    const antes = b.textContent;
+    b.textContent = "Copiado ✓";
+    setTimeout(() => (b.textContent = antes), 1600);
+  });
+  // Al hacer clic en un enlace generado se selecciona entero.
+  document.addEventListener("focusin", (ev) => {
+    if (ev.target.matches(".enlace-generado input, .enlace-generado textarea")) ev.target.select();
+  });
 })();
