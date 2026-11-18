@@ -1,0 +1,6 @@
+pedido,correo,importe,moneda,pais,fecha
+#1001,ana@ejemplo.com,12.50,EUR,ES,2026-11-10
+#1002,bruno@ejemplo.com,24.90,EUR,MX,2026-11-10
+#1003,carla@ejemplo.com,45.00,USD,US,2026-11-11
+#1004,dmitri@ejemplo.com,8.00,EUR,DE,2026-11-11
+#1005,eva@ejemplo.com,"38,00",GBP,GB,12/11/2026

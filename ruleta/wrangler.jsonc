@@ -1,0 +1,38 @@
+// Configuración de Cloudflare Workers (plan gratuito). Ver README para el despliegue paso a paso.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ruleta-ark",
+  "main": "src/index.tsx",
+  "compatibility_date": "2026-11-01",
+  // Sin dominio propio: se publica en https://ruleta-ark.<tu-subdominio>.workers.dev
+  "workers_dev": true,
+  "preview_urls": false,
+  // CSS, JS, fuentes e iconos se sirven como archivos estáticos (no cuentan como peticiones al Worker).
+  "assets": { "directory": "./public", "binding": "ASSETS" },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ruleta-ark",
+      // Pega aquí el id que te da `npx wrangler d1 create ruleta-ark`
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  // Cola de correos y mantenimiento diario. Usa 1 de los cron triggers gratuitos de la cuenta.
+  "triggers": { "crons": ["*/10 * * * *"] },
+  "observability": { "enabled": true },
+  "vars": {
+    // URL pública. Si la dejas vacía, se aprende sola la primera vez que entras al panel.
+    "URL_BASE": "",
+    "TIENDA_NOMBRE": "Mi Tienda",
+    "TIENDA_URL": "https://example.com",
+    // Remitente verificado en Brevo (idealmente de un dominio con DKIM/DMARC configurados en Brevo).
+    "REMITENTE_EMAIL": "ruleta@example.com",
+    "REMITENTE_NOMBRE": "Mi Tienda",
+    // Datos del responsable para los términos y la política de privacidad.
+    "CONTACTO_EMAIL": "privacidad@example.com",
+    "RESPONSABLE_NOMBRE": "Nombre y apellidos o razón social",
+    "RESPONSABLE_PAIS": "ES",
+    "ZONA_HORARIA": "Europe/Madrid"
+  }
+}

@@ -3,6 +3,9 @@ name: Compilar chiaki-ng ARK (Windows)
 # Se ejecuta al subir este archivo; se puede relanzar desde la pestana Actions > Run workflow
 on:
   push:
+    # Los cambios de la ruleta de premios (carpeta ruleta/) no necesitan recompilar chiaki-ng
+    paths-ignore:
+      - 'ruleta/**'
   workflow_dispatch:
 
 jobs:
