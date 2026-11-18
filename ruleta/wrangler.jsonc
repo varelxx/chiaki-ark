@@ -13,8 +13,9 @@
     {
       "binding": "DB",
       "database_name": "ruleta-ark",
-      // Pega aquí el id que te da `npx wrangler d1 create ruleta-ark`
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      // Creada con `npx wrangler d1 create ruleta-ark --jurisdiction eu` (datos guardados en la UE).
+      // Si despliegas en otra cuenta, crea la tuya y pega aquí su id.
+      "database_id": "55d296b3-225b-4d0f-832f-2c3e664f5e4b",
       "migrations_dir": "migrations"
     }
   ],
